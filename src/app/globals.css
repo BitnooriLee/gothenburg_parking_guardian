@@ -1,0 +1,8 @@
+@import "mapbox-gl/dist/mapbox-gl.css";
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
