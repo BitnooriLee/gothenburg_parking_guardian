@@ -1,5 +1,14 @@
 @import "mapbox-gl/dist/mapbox-gl.css";
 
+/* Scoped: Mapbox GL map/canvas fill + visible (CleaningSafetyMap root has data-gpg-cleaning-safety-map). */
+[data-gpg-cleaning-safety-map] .mapboxgl-map,
+[data-gpg-cleaning-safety-map] .mapboxgl-canvas {
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 1;
+  visibility: visible;
+}
+
 html,
 body {
   margin: 0;

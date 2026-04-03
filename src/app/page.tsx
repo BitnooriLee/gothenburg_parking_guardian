@@ -1,14 +1,15 @@
-import dynamic from "next/dynamic";
+import { MapErrorBoundary } from "@/components/MapErrorBoundary";
+import { MapSection } from "@/components/MapSection";
 
-const CleaningSafetyMap = dynamic(() => import("@/components/CleaningSafetyMap"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-screen items-center justify-center bg-[#F9FAFB] text-sm text-neutral-500">
-      Loading map…
-    </div>
-  ),
-});
-
+/**
+ * Map is client-only (Mapbox GL / WebGL). Loading is handled inside MapSection via dynamic import()
+ * in useEffect — equivalent to next/dynamic(..., { ssr: false }) but always renders a real DOM node
+ * (#gpg-map-loading or #gpg-map-shell) so Elements shows where the pipeline stopped.
+ */
 export default function HomePage() {
-  return <CleaningSafetyMap />;
+  return (
+    <MapErrorBoundary>
+      <MapSection />
+    </MapErrorBoundary>
+  );
 }

@@ -1,5 +1,6 @@
 /** Viewport-only fetch: bbox params reduce payload before GeoJSON reaches the client (vs loading all city polygons). */
 import { getMockCleaningZones } from "@/lib/mock-cleaning-zones";
+import { parseRpcGeomGeojson } from "@/lib/rpc-geometry";
 import { createClient } from "@supabase/supabase-js";
 import type { Feature, FeatureCollection } from "geojson";
 import { NextResponse } from "next/server";
@@ -9,11 +10,12 @@ export const dynamic = "force-dynamic";
 function toFeatureCollection(rows: { id: string; street_name: string | null; active_period_text: string | null; schedule: unknown; geom_geojson: unknown }[]): FeatureCollection {
   const features: Feature[] = [];
   for (const row of rows) {
-    if (!row.geom_geojson || typeof row.geom_geojson !== "object") continue;
+    const geometry = parseRpcGeomGeojson(row.geom_geojson);
+    if (!geometry) continue;
     features.push({
       type: "Feature",
       id: row.id,
-      geometry: row.geom_geojson as Feature["geometry"],
+      geometry,
       properties: {
         id: row.id,
         street_name: row.street_name ?? "",
@@ -48,7 +50,8 @@ export async function GET(req: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json(toFeatureCollection(data ?? []));
+    const rows = Array.isArray(data) ? data : [];
+    return NextResponse.json(toFeatureCollection(rows));
   }
 
   return NextResponse.json(getMockCleaningZones());

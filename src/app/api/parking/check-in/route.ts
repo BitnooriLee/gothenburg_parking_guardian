@@ -2,6 +2,7 @@ import { getNextCleaningStartMs, type CleaningSchedule } from "@/lib/cleaning-sa
 import { buildCleaningAlertBody, formatDeadlineStockholm } from "@/lib/notification-payload";
 import { getMockCleaningZones } from "@/lib/mock-cleaning-zones";
 import { featureContainsLngLat } from "@/lib/point-in-polygon";
+import { parseRpcGeomGeojson } from "@/lib/rpc-geometry";
 import { parseSwedishRestriction } from "@/lib/parser";
 import { createClient } from "@supabase/supabase-js";
 import type { Feature } from "geojson";
@@ -21,24 +22,65 @@ type Body = {
   subscription?: PushSubscriptionJSON;
 };
 
+/** Log detailed lat/lng when DEBUG_CLEANING_CHECKIN=1 or in development. */
+function shouldLogCleaningCheckInCoords(): boolean {
+  return process.env.DEBUG_CLEANING_CHECKIN === "1" || process.env.NODE_ENV === "development";
+}
+
 async function findZoneFeature(lat: number, lng: number): Promise<Feature | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (url && key) {
     const supabase = createClient(url, key);
-    const { data, error } = await supabase.rpc("cleaning_zone_at_point", { lat, lng });
-    if (error || !data?.length) return null;
-    const row = data[0] as {
+    const rpcName = "cleaning_zone_at_point";
+    const sqlHint =
+      "ST_Covers(ST_SetSRID(ST_Force2D(c.geom),4326), ST_SetSRID(ST_MakePoint(lng,lat),4326)) LIMIT 1";
+
+    if (shouldLogCleaningCheckInCoords()) {
+      console.info(`[check-in/${rpcName}] RPC args`, { lat, lng, order: "ST_MakePoint(lng, lat) EPSG:4326" });
+    }
+
+    const { data, error } = await supabase.rpc(rpcName, { lat, lng });
+
+    if (error) {
+      console.warn(`[check-in/${rpcName}] Supabase RPC error`, {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      return null;
+    }
+
+    const rowCount = Array.isArray(data) ? data.length : 0;
+    if (rowCount === 0) {
+      console.warn(`[check-in/${rpcName}] 0 rows (no polygon contains this point)`, {
+        lat,
+        lng,
+        rpc: `${rpcName}({ lat, lng })`,
+        matchExpression: sqlHint,
+        tip: "Run migration 006_cleaning_zone_at_point_srid.sql; sync cleaning_zones; verify point is inside a zone polygon.",
+      });
+      return null;
+    }
+
+    if (shouldLogCleaningCheckInCoords()) {
+      console.info(`[check-in/${rpcName}] match`, { rowCount, zoneId: (data as { id?: string }[])[0]?.id });
+    }
+
+    const row = (data as { id: string }[])[0] as {
       id: string;
       street_name: string | null;
       active_period_text: string | null;
       schedule: unknown;
       geom_geojson: unknown;
     };
+    const geometry = parseRpcGeomGeojson(row.geom_geojson);
+    if (!geometry) return null;
     return {
       type: "Feature",
       id: row.id,
-      geometry: row.geom_geojson as Feature["geometry"],
+      geometry,
       properties: {
         id: row.id,
         street_name: row.street_name ?? "",
@@ -69,7 +111,8 @@ export async function POST(req: Request) {
 
   const feature = await findZoneFeature(lat, lng);
   if (!feature?.properties) {
-    return NextResponse.json({ error: "No cleaning zone at this location" }, { status: 404 });
+    // 422 (not 404): avoids confusion with a missing API route in DevTools.
+    return NextResponse.json({ error: "No cleaning zone at this location" }, { status: 422 });
   }
 
   const street = String(feature.properties.street_name || feature.properties.id || "Unknown street");

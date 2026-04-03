@@ -15,7 +15,10 @@ function formatRemaining(ms: number): string {
 export default function ParkHereBar() {
   const [session, setSession] = useState<ParkingSession | null>(null);
   const [tick, setTick] = useState(0);
-  const [status, setStatus] = useState<string | null>(null);
+  /** True only after the current check-in request finishes (success or error). Hides feedback until HTTP response is handled. */
+  const [checkInResponseDone, setCheckInResponseDone] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [infoText, setInfoText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,8 +36,10 @@ export default function ParkHereBar() {
   }, [session, tick]);
 
   const onParkHere = useCallback(async () => {
+    setCheckInResponseDone(false);
     setLoading(true);
-    setStatus(null);
+    setErrorText(null);
+    setInfoText(null);
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 });
@@ -62,36 +67,52 @@ export default function ParkHereBar() {
             : undefined,
         }),
       });
-      const data = (await res.json()) as {
+      let data: {
         ok?: boolean;
         session?: ParkingSession;
         message?: string;
         error?: string;
       };
-      if (!res.ok) {
-        setStatus(data.error ?? "Check-in failed");
+      try {
+        data = (await res.json()) as typeof data;
+      } catch {
+        setErrorText("Invalid response from server");
         return;
       }
-      if (data.session) {
+      if (!res.ok) {
+        const errRaw = data?.error;
+        const err =
+          typeof errRaw === "string" && errRaw.trim() !== "" ? errRaw.trim() : "Check-in failed";
+        setErrorText(err);
+        return;
+      }
+      if (data?.session) {
         saveParkingSession(data.session);
         setSession(data.session);
       }
-      setStatus(data.message ?? "Saved.");
+      const msg = data?.message?.trim();
+      setInfoText(msg || "Saved.");
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Location or push failed");
+      setErrorText(e instanceof Error ? e.message : "Location or push failed");
     } finally {
       setLoading(false);
+      setCheckInResponseDone(true);
     }
   }, []);
 
   const onClear = useCallback(() => {
     clearParkingSession();
     setSession(null);
-    setStatus(null);
+    setCheckInResponseDone(false);
+    setErrorText(null);
+    setInfoText(null);
   }, []);
 
   return (
-    <div className="pointer-events-auto absolute bottom-0 left-0 right-0 z-20 border-t border-neutral-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] backdrop-blur">
+    <div
+      className="absolute bottom-0 left-0 right-0 z-20 border-t border-neutral-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] backdrop-blur"
+      style={{ pointerEvents: "none" }}
+    >
       <div className="mx-auto flex max-w-lg flex-col gap-2">
         {session && (
           <div className="text-center text-xs text-neutral-600">
@@ -109,6 +130,7 @@ export default function ParkHereBar() {
             disabled={loading}
             onClick={() => void onParkHere()}
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+            style={{ pointerEvents: "auto" }}
           >
             <MapPin className="h-4 w-4" aria-hidden />
             Park Here / Parkera här
@@ -118,12 +140,18 @@ export default function ParkHereBar() {
               type="button"
               onClick={onClear}
               className="rounded-lg border border-neutral-300 px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50"
+              style={{ pointerEvents: "auto" }}
             >
               Clear
             </button>
           )}
         </div>
-        {status && <p className="text-center text-xs text-neutral-500">{status}</p>}
+        {checkInResponseDone && !loading && errorText != null && errorText !== "" && (
+          <p className="text-center text-xs text-red-600">{errorText}</p>
+        )}
+        {checkInResponseDone && !loading && !errorText && infoText != null && infoText !== "" && (
+          <p className="text-center text-xs text-neutral-500">{infoText}</p>
+        )}
       </div>
     </div>
   );
