@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Set `NEXT_PUBLIC_MAPBOX_TOKEN` in `.env.local` for the map.
+Open [http://localhost:3003](http://localhost:3003). Set `NEXT_PUBLIC_MAPBOX_TOKEN` in `.env.local` for the map.
 
 ## Docs
 
