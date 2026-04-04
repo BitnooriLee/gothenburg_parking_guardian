@@ -34,6 +34,9 @@ Thumbs.db
 # Testing / coverage
 coverage/
 
+# Local fetched datasets (regenerate with scripts/fetch_real_parking_taxa.py)
+real_parking_taxa.json
+
 # PWA build artifacts (regenerated on build; optional to ignore sw if committed intentionally)
 # public/sw.js
 # public/workbox-*.js

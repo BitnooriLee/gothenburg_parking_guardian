@@ -17,10 +17,25 @@ type PushSubscriptionJSON = {
 };
 
 type Body = {
-  lat: number;
-  lng: number;
+  lat?: unknown;
+  lng?: unknown;
+  /** Some clients send latitude/longitude; normalize to lat/lng. */
+  latitude?: unknown;
+  longitude?: unknown;
   subscription?: PushSubscriptionJSON;
 };
+
+function parseCoord(primary: unknown, alias: unknown): number | null {
+  const candidates = [primary, alias];
+  for (const v of candidates) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
 
 /** Log detailed lat/lng when DEBUG_CLEANING_CHECKIN=1 or in development. */
 function shouldLogCleaningCheckInCoords(): boolean {
@@ -104,13 +119,37 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { lat, lng, subscription } = body;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return NextResponse.json({ error: "lat/lng required" }, { status: 400 });
+  const lat = parseCoord(body.lat, body.latitude);
+  const lng = parseCoord(body.lng, body.longitude);
+  const { subscription } = body;
+
+  if (lat == null || lng == null) {
+    if (shouldLogCleaningCheckInCoords()) {
+      console.warn("[check-in] missing or non-finite coordinates", {
+        keysPresent: Object.keys(body),
+        latRaw: body.lat,
+        lngRaw: body.lng,
+        latitudeRaw: body.latitude,
+        longitudeRaw: body.longitude,
+        hint: "Send JSON { lat, lng } in decimal degrees (EPSG:4326). Aliases latitude/longitude are accepted.",
+      });
+    }
+    return NextResponse.json(
+      {
+        error: "lat and lng are required (finite numbers). Optional aliases: latitude, longitude.",
+      },
+      { status: 400 },
+    );
   }
 
   const feature = await findZoneFeature(lat, lng);
   if (!feature?.properties) {
+    if (shouldLogCleaningCheckInCoords()) {
+      console.warn("[check-in] 422 no polygon at coordinates (coords were valid; DB/RPC returned no zone)", {
+        lat,
+        lng,
+      });
+    }
     // 422 (not 404): avoids confusion with a missing API route in DevTools.
     return NextResponse.json({ error: "No cleaning zone at this location" }, { status: 422 });
   }

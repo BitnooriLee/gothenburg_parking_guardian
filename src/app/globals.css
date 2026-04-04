@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @import "mapbox-gl/dist/mapbox-gl.css";
 
 /* Scoped: Mapbox GL map/canvas fill + visible (CleaningSafetyMap root has data-gpg-cleaning-safety-map). */
@@ -7,6 +11,110 @@
   height: 100% !important;
   opacity: 1;
   visibility: visible;
+}
+
+/*
+ * Canvas stays low; react-map-gl child container above canvas for Source/Layer;
+ * Mapbox control UI above canvas (high z-index so WebGL compositing does not eat clicks).
+ */
+[data-gpg-cleaning-safety-map] .mapboxgl-map {
+  z-index: 0 !important;
+}
+[data-gpg-cleaning-safety-map] .mapboxgl-canvas-container {
+  z-index: 0 !important;
+  pointer-events: auto !important;
+}
+[data-gpg-cleaning-safety-map] .mapboxgl-canvas {
+  z-index: 0 !important;
+  pointer-events: auto !important;
+}
+[data-gpg-cleaning-safety-map] .mapboxgl-children {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+[data-gpg-cleaning-safety-map] .mapboxgl-control-container {
+  z-index: 8000 !important;
+  pointer-events: none !important;
+}
+[data-gpg-cleaning-safety-map] .mapboxgl-control-container .mapboxgl-ctrl {
+  pointer-events: auto !important;
+}
+
+/* Zoom +/-: top-right, below settings gear (top-4 + ~44px). */
+[data-gpg-cleaning-safety-map] .mapboxgl-ctrl-top-right {
+  top: max(calc(env(safe-area-inset-top, 0px) + 4.25rem), 4.25rem) !important;
+  right: max(1rem, env(safe-area-inset-right, 0px)) !important;
+  left: auto !important;
+  bottom: auto !important;
+}
+
+[data-gpg-cleaning-safety-map] .mapboxgl-ctrl-top-left .mapboxgl-ctrl-zoom {
+  display: none !important;
+}
+
+[data-gpg-cleaning-safety-map] .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl-zoom,
+[data-gpg-cleaning-safety-map] .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-zoom {
+  display: none !important;
+}
+
+/* Floating map HTML controls (siblings of map slot; above canvas, below modals). */
+[data-gpg-cleaning-safety-map] .gpg-map-float {
+  isolation: isolate;
+}
+[data-gpg-cleaning-safety-map] .gpg-parking-settings-toggle {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+[data-gpg-cleaning-safety-map] .gpg-map-float,
+[data-gpg-cleaning-safety-map] .gpg-map-float button,
+[data-gpg-cleaning-safety-map] .gpg-map-float button:disabled,
+[data-gpg-cleaning-safety-map] .mapboxgl-ctrl button,
+[data-gpg-cleaning-safety-map] .mapboxgl-marker button {
+  cursor: pointer !important;
+}
+
+[data-gpg-cleaning-safety-map] .gpg-map-float label.gpg-time-slider-label,
+[data-gpg-cleaning-safety-map] .gpg-map-float input[type="range"] {
+  cursor: pointer !important;
+}
+
+[data-gpg-settings-modal] button {
+  cursor: pointer !important;
+}
+
+/* Portal modal: explicit fallbacks if utilities are purged or overridden. */
+[data-gpg-settings-modal] {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgb(0 0 0 / 0.4);
+}
+@media (min-width: 640px) {
+  [data-gpg-settings-modal] {
+    align-items: center;
+  }
+}
+[data-gpg-settings-modal] [role="dialog"] {
+  position: relative;
+  z-index: 100001;
+  max-height: 90vh;
+  width: 100%;
+  max-width: 24rem;
+  overflow-y: auto;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e5e5;
+  background-color: #fff;
+  color: #171717;
+  padding: 1rem;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
 html,

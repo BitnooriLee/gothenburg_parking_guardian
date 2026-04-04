@@ -1,0 +1,2 @@
+# Optional: only needed for --native-crs or automatic reprojection fallback
+pyproj>=3.6.0

@@ -12,7 +12,12 @@ function formatRemaining(ms: number): string {
   return `${h}h ${m}m`;
 }
 
-export default function ParkHereBar() {
+type ParkHereBarProps = {
+  /** Map overlay: no full-width dock; tight card so fixed parents do not span the viewport. */
+  compact?: boolean;
+};
+
+export default function ParkHereBar({ compact = false }: ParkHereBarProps) {
   const [session, setSession] = useState<ParkingSession | null>(null);
   const [tick, setTick] = useState(0);
   /** True only after the current check-in request finishes (success or error). Hides feedback until HTTP response is handled. */
@@ -44,6 +49,19 @@ export default function ParkHereBar() {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 });
       });
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        setErrorText("GPS returned invalid coordinates; try again outdoors.");
+        return;
+      }
+      if (process.env.NODE_ENV === "development") {
+        console.info("[ParkHereBar] check-in using coordinates", {
+          lat,
+          lng,
+          accuracyMeters: pos.coords.accuracy,
+        });
+      }
       let subJson: ReturnType<PushSubscription["toJSON"]> | undefined;
       if ("Notification" in window && Notification.permission === "default") {
         await Notification.requestPermission();
@@ -57,8 +75,8 @@ export default function ParkHereBar() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
+          lat,
+          lng,
           subscription: subJson
             ? {
                 endpoint: subJson.endpoint!,
@@ -108,11 +126,12 @@ export default function ParkHereBar() {
     setInfoText(null);
   }, []);
 
+  const rootClass = compact
+    ? "relative z-20 w-max max-w-[min(100vw-1.5rem,42rem)] rounded-xl border border-neutral-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur"
+    : "absolute bottom-0 left-0 right-0 z-20 border-t border-neutral-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] backdrop-blur";
+
   return (
-    <div
-      className="absolute bottom-0 left-0 right-0 z-20 border-t border-neutral-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] backdrop-blur"
-      style={{ pointerEvents: "none" }}
-    >
+    <div className={rootClass} style={{ pointerEvents: "none" }}>
       <div className="mx-auto flex max-w-lg flex-col gap-2">
         {session && (
           <div className="text-center text-xs text-neutral-600">
@@ -129,7 +148,7 @@ export default function ParkHereBar() {
             type="button"
             disabled={loading}
             onClick={() => void onParkHere()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+            className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
             style={{ pointerEvents: "auto" }}
           >
             <MapPin className="h-4 w-4" aria-hidden />
@@ -139,7 +158,7 @@ export default function ParkHereBar() {
             <button
               type="button"
               onClick={onClear}
-              className="rounded-lg border border-neutral-300 px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50"
+              className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50"
               style={{ pointerEvents: "auto" }}
             >
               Clear

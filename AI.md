@@ -29,9 +29,9 @@
 3. **Countdown Timer**: Simple UI to start a timer for "PublicTimeParkings" with a 15-minute warning.
 
 ## 6. Current Progress & Context
-- Initial setup phase.
-- Need to implement the `Parser` that converts Swedish strings into Date objects.
-- Need to set up Supabase tables with `geometry` support.
+- **Step 1 complete**: Cleaning zones (API + map) and parking **Taxa** zones are wired end-to-end, including **real geometry import** from Gothenburg’s open data pipeline (WFS / GeoServer–sourced parking tariff layers, bulk upsert into `parking_taxa_zones` — see `scripts/import_taxa_to_supabase.ts` and `real_parking_taxa.json`).
+- **Active focus**: **Step 2 — Personalized Resident Logic** (Boendeparkering): home zone profile, pricing overrides, and map emphasis for “my” resident areas.
+- Still to deepen: Swedish rules `Parser` (full string → machine-readable schedule), richer temporal APIs, and proximity-based suggestions (Steps 3–4).
 
 ## 7. Useful Reference Links
 - API Help: https://data.goteborg.se/ParkingService/v2.3/help
@@ -64,7 +64,40 @@
 - Danger (Fine): `#EF4444` (Red)
 
 ## 4. Work History & Next Steps
-- [ ] Step 1: Define TypeScript Interfaces (API Spec)
-- [ ] Step 2: Implement Swedish Parking Rule Parser
-- [ ] Step 3: Setup Supabase PostGIS Tables
-- [ ] Step 4: Map Integration & Marker Logic
+[x] Step 0: Core Infrastructure & Cleaning Zones Fix
+
+[x] Fix PostGIS RPC for cleaning_zones_in_bounds (UUID vs Text ID issues).
+
+[x] Implement JSON parsing logic in API route for geom_geojson strings.
+
+[x] Fix Mapbox layer rendering for LineString & MultiLineString types.
+
+[x] Step 1: Dynamic Pricing (Taxeområde) Visualization *(completed — includes real Taxa data import from Gothenburg GeoServer / WFS → Supabase)*
+
+[x] Setup `parking_taxa_zones` table & RPC in Supabase (`get_taxa_in_bounds`, generic geometry support).
+
+[x] Implement `GET /api/parking-taxa` with bbox fetch and expression-based line colors by `taxa_name` / hourly rate.
+
+[x] Mapbox GeoJSON source + **line** layer (WFS segments are often LineString/MultiLineString; polygons supported where present).
+
+[ ] Step 2: Personalized Resident (Boendeparkering) Logic *(current focus)*
+
+[ ] Implement user profile/settings to store "Home Zone" (e.g., Zone L, Zone V).
+
+[ ] Add logic to override Taxa pricing with "Free/Discounted" status if zone matches user profile.
+
+[ ] Highlight "My Resident Zones" with a distinct border or glow on the map.
+
+[ ] Step 3: Temporal Simulation (Time Slider)
+
+[ ] Add UI Slider component for time travel (Current Time → +24 hours).
+
+[ ] Refactor API to accept timestamp param and return active rules for that specific time.
+
+[ ] Implement "Morning Rush Prediction": Show which zones turn from Free to Paid at 08:00/09:00 AM.
+
+[ ] Step 4: Proximity-Based Alternative Finder
+
+[ ] Use Turf.js to find the nearest "Cheaper" or "Non-Cleaning" zone within 20m-100m.
+
+[ ] Implement "Actionable Tooltips": "Cleaning starts here in 2h. 50m away is a Taxa 7 zone (Free now)."
