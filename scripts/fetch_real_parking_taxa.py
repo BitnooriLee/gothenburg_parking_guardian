@@ -59,6 +59,10 @@ TAXA_TYPE_NAMES: tuple[str, ...] = (
     "parkering:taxa_a",
 )
 
+# Resident (Boende) area polygons — not included in TAXA_TYPE_NAMES above.
+# Properties include `boende` (zone letter, e.g. M, L, Ö) and `parkeringsområde`.
+BOENDE_OMRADE_TYPE_NAME = "parkering:boendeparkering-omrade"
+
 
 def _wfs_get_feature_url(
     type_name: str,
@@ -192,6 +196,49 @@ def fetch_layer(
     return out
 
 
+def fetch_boende_omrade_layer(
+    *,
+    use_wgs84_request: bool,
+    source_epsg: int,
+    force_reproject: bool,
+) -> list[dict[str, Any]]:
+    """Fetch Boendeparkering area polygons; align with import script via ParkingCharge → taxa_name."""
+    type_name = BOENDE_OMRADE_TYPE_NAME
+    srs = "EPSG:4326" if use_wgs84_request else None
+    url = _wfs_get_feature_url(
+        type_name, output_format="application/json", srs_name=srs
+    )
+    fc = http_get_json(url)
+    feats = fc.get("features") or []
+    need_reproject = force_reproject or (
+        not _crs_is_wgs84(fc) and feats and _coords_look_projected(feats[0].get("geometry"))
+    )
+    out: list[dict[str, Any]] = []
+    for f in feats:
+        g = f.get("geometry")
+        if not g:
+            continue
+        if need_reproject:
+            g = reproject_geometry(g, source_epsg)
+        props = dict(f.get("properties") or {})
+        letter = str(props.get("boende") or "").strip()
+        if not letter:
+            continue
+        props["wfs_type_name"] = type_name
+        props["taxa_code"] = letter
+        # import_taxa_to_supabase.ts: taxaDisplayName uses ParkingCharge when set → taxa_name
+        props["ParkingCharge"] = f"Boende {letter}"
+        out.append(
+            {
+                "type": "Feature",
+                "id": f.get("id"),
+                "geometry": g,
+                "properties": props,
+            }
+        )
+    return out
+
+
 def build_feature_collection(features: Iterable[dict[str, Any]]) -> dict[str, Any]:
     return {
         "type": "FeatureCollection",
@@ -243,6 +290,21 @@ def main() -> int:
             raise
         all_features.extend(layer_feats)
         print(f"{tn}: {len(layer_feats)} features", file=sys.stderr)
+
+    try:
+        boende_feats = fetch_boende_omrade_layer(
+            use_wgs84_request=use_wgs84,
+            source_epsg=args.source_epsg,
+            force_reproject=force_reproject,
+        )
+        all_features.extend(boende_feats)
+        print(
+            f"{BOENDE_OMRADE_TYPE_NAME}: {len(boende_feats)} features",
+            file=sys.stderr,
+        )
+    except urllib.error.HTTPError as e:
+        print(f"HTTP error for {BOENDE_OMRADE_TYPE_NAME}: {e}", file=sys.stderr)
+        raise
 
     fc = build_feature_collection(all_features)
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -3,7 +3,7 @@
  *
  * Environment variables:
  * - VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY — URL-safe base64 pair (generate once: `npx web-push generate-vapid-keys`).
- * - NEXT_PUBLIC_VAPID_PUBLIC_KEY — same public key for the browser (`PushManager.subscribe`); can mirror VAPID_PUBLIC_KEY.
+ * - NEXT_PUBLIC_VAPID_PUBLIC_KEY — same public key for the browser (`PushManager.subscribe`). Server `configureWebPush()` falls back to this if `VAPID_PUBLIC_KEY` is unset.
  * - VAPID_SUBJECT — contact URI, usually `mailto:you@domain` (RFC 8292).
  *
  * Notification architecture (prefer server-triggered delivery):
@@ -16,8 +16,9 @@ import webpush from "web-push";
 let configured = false;
 
 export function configureWebPush(): boolean {
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const publicKey =
+    process.env.VAPID_PUBLIC_KEY?.trim() || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() || "";
+  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim() || "";
   const subject = process.env.VAPID_SUBJECT ?? "mailto:dev@localhost";
   if (!publicKey || !privateKey) return false;
   webpush.setVapidDetails(subject, publicKey, privateKey);
@@ -26,7 +27,10 @@ export function configureWebPush(): boolean {
 }
 
 export function getVapidPublicKey(): string | null {
-  return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY ?? null;
+  const fromPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
+  if (fromPublic) return fromPublic;
+  const fromServer = process.env.VAPID_PUBLIC_KEY?.trim();
+  return fromServer || null;
 }
 
 export { webpush };

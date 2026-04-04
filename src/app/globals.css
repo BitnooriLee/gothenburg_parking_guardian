@@ -44,10 +44,10 @@
   pointer-events: auto !important;
 }
 
-/* Zoom +/-: top-right, below settings gear (top-4 + ~44px). */
+/* Zoom +/-: top-right, left of settings gear + cleaning-zones toggle (two h-11 + gaps). */
 [data-gpg-cleaning-safety-map] .mapboxgl-ctrl-top-right {
   top: max(calc(env(safe-area-inset-top, 0px) + 4.25rem), 4.25rem) !important;
-  right: max(1rem, env(safe-area-inset-right, 0px)) !important;
+  right: max(calc(env(safe-area-inset-right, 0px) + 7.5rem), 7.5rem) !important;
   left: auto !important;
   bottom: auto !important;
 }
@@ -61,13 +61,44 @@
   display: none !important;
 }
 
+/* Floating HTML chrome: transparent hit-surface above map; children re-enable pointer-events. */
+[data-gpg-map-chrome] {
+  pointer-events: none !important;
+}
+[data-gpg-map-chrome] .gpg-map-float,
+[data-gpg-map-chrome] .gpg-parking-settings-toggle,
+[data-gpg-map-chrome] .gpg-cleaning-zones-toggle {
+  pointer-events: auto !important;
+}
+
 /* Floating map HTML controls (siblings of map slot; above canvas, below modals). */
 [data-gpg-cleaning-safety-map] .gpg-map-float {
   isolation: isolate;
 }
+
+/* Park check-in must stack above time slider (z-[10001]) and geolocate; keep hits on the card. */
+[data-gpg-cleaning-safety-map] [data-gpg-float="park-here"] {
+  isolation: auto !important;
+  z-index: 10035 !important;
+  visibility: visible !important;
+}
+[data-gpg-map-chrome] [data-gpg-float="park-here"],
+[data-gpg-map-chrome] [data-gpg-float="park-here"] button,
+[data-gpg-map-chrome] [data-gpg-park-check-in] {
+  pointer-events: auto !important;
+}
+[data-gpg-park-check-in] {
+  visibility: visible !important;
+}
 [data-gpg-cleaning-safety-map] .gpg-parking-settings-toggle {
   opacity: 1 !important;
   visibility: visible !important;
+  z-index: 10060 !important;
+}
+[data-gpg-cleaning-safety-map] .gpg-cleaning-zones-toggle {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 10059 !important;
 }
 [data-gpg-cleaning-safety-map] .gpg-map-float,
 [data-gpg-cleaning-safety-map] .gpg-map-float button,

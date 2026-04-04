@@ -12,6 +12,38 @@ export type CleaningSchedule = {
   ActivePeriodText?: string;
 };
 
+/**
+ * `cleaning_zones.schedule` JSONB from sync uses snake_case (`current_period_end`, …).
+ * Map / check-in logic expects camelCase on `CleaningSchedule`. Merge both.
+ */
+export function cleaningScheduleFromDbJsonb(raw: unknown): CleaningSchedule {
+  if (raw == null || typeof raw !== "object") return {};
+  const o = raw as Record<string, unknown>;
+  const pick = (camel: string, snake: string): string | undefined => {
+    const a = o[camel];
+    const b = o[snake];
+    if (typeof a === "string" && a.trim()) return a.trim();
+    if (typeof b === "string" && b.trim()) return b.trim();
+    return undefined;
+  };
+  return {
+    nextCleaningStart: pick("nextCleaningStart", "next_cleaning_start"),
+    currentPeriodStart: pick("currentPeriodStart", "current_period_start"),
+    currentPeriodEnd: pick("currentPeriodEnd", "current_period_end"),
+    ActivePeriodText: pick("ActivePeriodText", "active_period_text"),
+  };
+}
+
+/** Zone row: merge JSONB schedule with top-level `active_period_text` column. */
+export function scheduleFromZoneProperties(props: Record<string, unknown>): CleaningSchedule {
+  const s = cleaningScheduleFromDbJsonb(props.schedule);
+  const apt = props.active_period_text;
+  if (typeof apt === "string" && apt.trim() && !s.ActivePeriodText) {
+    return { ...s, ActivePeriodText: apt.trim() };
+  }
+  return s;
+}
+
 function parseMs(value: string | undefined): number | null {
   if (!value?.trim()) return null;
   const s = value.trim();

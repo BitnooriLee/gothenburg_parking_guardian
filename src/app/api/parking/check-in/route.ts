@@ -1,11 +1,14 @@
-import { getNextCleaningStartMs, type CleaningSchedule } from "@/lib/cleaning-safety";
+import {
+  getNextCleaningStartMs,
+  type CleaningSchedule,
+  scheduleFromZoneProperties,
+} from "@/lib/cleaning-safety";
+import type { ParkingSession } from "@/lib/parking-session";
 import { buildCleaningAlertBody, formatDeadlineStockholm } from "@/lib/notification-payload";
-import { getMockCleaningZones } from "@/lib/mock-cleaning-zones";
-import { featureContainsLngLat } from "@/lib/point-in-polygon";
-import { parseRpcGeomGeojson } from "@/lib/rpc-geometry";
+import { findCleaningZoneFeatureAtPoint } from "@/lib/find-cleaning-zone-feature-at-point";
 import { parseSwedishRestriction } from "@/lib/parser";
+import { normalizeSupabaseRpcRows } from "@/lib/supabase-rpc-rows";
 import { createClient } from "@supabase/supabase-js";
-import type { Feature } from "geojson";
 import { NextResponse } from "next/server";
 import { configureWebPush } from "@/lib/web-push-env";
 
@@ -42,74 +45,76 @@ function shouldLogCleaningCheckInCoords(): boolean {
   return process.env.DEBUG_CLEANING_CHECKIN === "1" || process.env.NODE_ENV === "development";
 }
 
-async function findZoneFeature(lat: number, lng: number): Promise<Feature | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (url && key) {
-    const supabase = createClient(url, key);
-    const rpcName = "cleaning_zone_at_point";
-    const sqlHint =
-      "ST_Covers(ST_SetSRID(ST_Force2D(c.geom),4326), ST_SetSRID(ST_MakePoint(lng,lat),4326)) LIMIT 1";
+type TaxaRpcRow = {
+  taxa_name?: string;
+  taxaName?: string;
+  hourly_rate?: unknown;
+  hourlyRate?: unknown;
+};
 
-    if (shouldLogCleaningCheckInCoords()) {
-      console.info(`[check-in/${rpcName}] RPC args`, { lat, lng, order: "ST_MakePoint(lng, lat) EPSG:4326" });
-    }
-
-    const { data, error } = await supabase.rpc(rpcName, { lat, lng });
-
-    if (error) {
-      console.warn(`[check-in/${rpcName}] Supabase RPC error`, {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
-      return null;
-    }
-
-    const rowCount = Array.isArray(data) ? data.length : 0;
-    if (rowCount === 0) {
-      console.warn(`[check-in/${rpcName}] 0 rows (no polygon contains this point)`, {
-        lat,
-        lng,
-        rpc: `${rpcName}({ lat, lng })`,
-        matchExpression: sqlHint,
-        tip: "Run migration 006_cleaning_zone_at_point_srid.sql; sync cleaning_zones; verify point is inside a zone polygon.",
-      });
-      return null;
-    }
-
-    if (shouldLogCleaningCheckInCoords()) {
-      console.info(`[check-in/${rpcName}] match`, { rowCount, zoneId: (data as { id?: string }[])[0]?.id });
-    }
-
-    const row = (data as { id: string }[])[0] as {
-      id: string;
-      street_name: string | null;
-      active_period_text: string | null;
-      schedule: unknown;
-      geom_geojson: unknown;
-    };
-    const geometry = parseRpcGeomGeojson(row.geom_geojson);
-    if (!geometry) return null;
-    return {
-      type: "Feature",
-      id: row.id,
-      geometry,
-      properties: {
-        id: row.id,
-        street_name: row.street_name ?? "",
-        active_period_text: row.active_period_text ?? "",
-        schedule: row.schedule ?? {},
-      },
-    };
-  }
-
-  const fc = getMockCleaningZones();
-  for (const f of fc.features) {
-    if (featureContainsLngLat(f, lng, lat)) return f;
+function parseHourlyRate(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw.trim().replace(",", "."));
+    return Number.isFinite(n) ? n : null;
   }
   return null;
+}
+
+async function findTaxaAtPoint(
+  lat: number,
+  lng: number,
+): Promise<{ taxaName: string; hourlyRate: number } | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    if (shouldLogCleaningCheckInCoords()) {
+      console.warn("[check-in/parking_taxa_at_point] skipped: missing Supabase URL or anon key");
+    }
+    return null;
+  }
+  const supabase = createClient(url, key);
+  const { data, error } = await supabase.rpc("parking_taxa_at_point", { lat, lng });
+  if (error) {
+    console.warn("[check-in/parking_taxa_at_point] RPC error", {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
+    return null;
+  }
+
+  const rows = normalizeSupabaseRpcRows<TaxaRpcRow>(data);
+  const row = rows[0];
+  const nameRaw = row?.taxa_name ?? row?.taxaName;
+  const taxaName = typeof nameRaw === "string" ? nameRaw.trim() : "";
+  if (!taxaName) {
+    if (shouldLogCleaningCheckInCoords()) {
+      console.info("[check-in/parking_taxa_at_point] no row / empty taxa_name", {
+        lat,
+        lng,
+        rowCount: rows.length,
+        rawType: data === null ? "null" : Array.isArray(data) ? "array" : typeof data,
+      });
+    }
+    return null;
+  }
+
+  const rate = parseHourlyRate(row.hourly_rate ?? row.hourlyRate);
+  const hourlyRate = rate ?? 0;
+
+  if (shouldLogCleaningCheckInCoords()) {
+    console.info("[check-in/parking_taxa_at_point] hit", {
+      lat,
+      lng,
+      taxaName,
+      hourlyRate,
+      rowCount: rows.length,
+    });
+  }
+
+  return { taxaName, hourlyRate };
 }
 
 export async function POST(req: Request) {
@@ -142,7 +147,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const feature = await findZoneFeature(lat, lng);
+  const feature = await findCleaningZoneFeatureAtPoint(lat, lng);
   if (!feature?.properties) {
     if (shouldLogCleaningCheckInCoords()) {
       console.warn("[check-in] 422 no polygon at coordinates (coords were valid; DB/RPC returned no zone)", {
@@ -156,7 +161,7 @@ export async function POST(req: Request) {
 
   const street = String(feature.properties.street_name || feature.properties.id || "Unknown street");
   const activeText = String(feature.properties.active_period_text || "");
-  const schedule = (feature.properties.schedule ?? {}) as CleaningSchedule;
+  const schedule = scheduleFromZoneProperties(feature.properties as Record<string, unknown>);
 
   const parsedRule = parseSwedishRestriction(activeText);
   const now = new Date();
@@ -165,6 +170,12 @@ export async function POST(req: Request) {
     nextMs = new Date(schedule.nextCleaningStart).getTime();
   }
   if (nextMs == null) {
+    if (shouldLogCleaningCheckInCoords()) {
+      console.warn("[check-in] 422 next cleaning time unresolved (check schedule JSONB keys)", {
+        zoneId: feature.properties.id,
+        scheduleSnapshot: schedule,
+      });
+    }
     return NextResponse.json(
       { error: "Could not determine next cleaning time from zone data" },
       { status: 422 },
@@ -176,7 +187,9 @@ export async function POST(req: Request) {
   const alert1 = new Date(nextMs - 1 * 3600000).toISOString();
   const deadlineSv = formatDeadlineStockholm(nextCleaningIso);
 
-  const session = {
+  const taxaHit = await findTaxaAtPoint(lat, lng);
+
+  const session: ParkingSession = {
     zoneId: String(feature.properties.id),
     streetName: street,
     checkedInAt: now.toISOString(),
@@ -184,6 +197,9 @@ export async function POST(req: Request) {
     alert12hIso: alert12,
     alert1hIso: alert1,
     parsedRuleJson: JSON.stringify(parsedRule),
+    cleaningScheduleJson: JSON.stringify(schedule),
+    taxaName: taxaHit?.taxaName,
+    hourlyRate: taxaHit != null ? taxaHit.hourlyRate : null,
   };
 
   const payloadBase = {
@@ -222,7 +238,7 @@ export async function POST(req: Request) {
       !subscription
         ? "No push subscription; enable notifications and try again for server-side alerts."
         : !configureWebPush()
-          ? "VAPID keys missing; set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY."
+          ? "VAPID keys missing; set VAPID_PRIVATE_KEY and a public key (VAPID_PUBLIC_KEY or NEXT_PUBLIC_VAPID_PUBLIC_KEY)."
           : !supabaseUrl || !serviceKey
             ? "Supabase service role missing; alerts stored client-side only."
             : "Two push alerts queued (12h and 1h before cleaning).",

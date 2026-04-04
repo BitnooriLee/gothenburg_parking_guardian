@@ -13,7 +13,7 @@ import { createPortal } from "react-dom";
  * so it mounts at the end of <body>, above the React root and map floats (z-[100000] overlay).
  */
 export default function ParkingSettings() {
-  const { residentZone, setResidentZone } = useResidentZone();
+  const { residentZone, setResidentZone, showCleaningZones, setShowCleaningZones } = useResidentZone();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const titleId = useId();
@@ -102,6 +102,23 @@ export default function ParkingSettings() {
           <p className="relative z-[100001] mt-3 text-[11px] leading-snug text-neutral-900">
             Ditt val sparas på enheten. / Saved on this device only.
           </p>
+
+          <label className="relative z-[100001] mt-5 flex cursor-pointer items-start gap-3 border-t border-neutral-100 pt-4">
+            <input
+              type="checkbox"
+              checked={showCleaningZones}
+              onChange={(e) => setShowCleaningZones(e.target.checked)}
+              className="relative z-[100001] mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+              aria-label="Visa städzoner (Show Cleaning Zones)"
+            />
+            <span className="text-xs font-medium leading-snug text-neutral-900">
+              Visa städzoner (Show Cleaning Zones)
+            </span>
+          </label>
+          <p className="relative z-[100001] mt-2 text-[10px] leading-snug text-neutral-500">
+            Avstängd: kartan är enklare. Städning visas ändå när du parkerar eller trycker på kartan. · Off: simpler map;
+            cleaning still shown when you park or tap the map.
+          </p>
         </div>
       </div>,
       document.body,
@@ -112,7 +129,8 @@ export default function ParkingSettings() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="gpg-map-float gpg-parking-settings-toggle pointer-events-auto fixed right-4 top-4 z-[9999] flex cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white p-2.5 text-neutral-800 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        className="gpg-map-float gpg-parking-settings-toggle pointer-events-auto fixed right-4 z-[10060] flex cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white p-2.5 text-neutral-800 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
         aria-label="Parking settings — Parkering"
         title="Parking settings"
       >

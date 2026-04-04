@@ -8,16 +8,43 @@ export type ParkingSession = {
   alert1hIso: string;
   /** Parsed rule snapshot from parser (optional) */
   parsedRuleJson?: string;
+  /** Nearest taxa at check-in (from `parking_taxa_at_point`) */
+  taxaName?: string;
+  /** Hourly rate in SEK; omit if no taxa match */
+  hourlyRate?: number | null;
+  /** Snapshot of cleaning schedule JSON for the matched zone */
+  cleaningScheduleJson?: string;
 };
 
 const KEY = "gpg:parking-session";
+
+function isValidParkingSession(value: unknown): value is ParkingSession {
+  if (value == null || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  return (
+    typeof o.zoneId === "string" &&
+    o.zoneId.length > 0 &&
+    typeof o.streetName === "string" &&
+    typeof o.checkedInAt === "string" &&
+    o.checkedInAt.length > 0 &&
+    typeof o.nextCleaningIso === "string" &&
+    o.nextCleaningIso.length > 0 &&
+    typeof o.alert12hIso === "string" &&
+    typeof o.alert1hIso === "string"
+  );
+}
 
 export function loadParkingSession(): ParkingSession | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as ParkingSession;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isValidParkingSession(parsed)) {
+      localStorage.removeItem(KEY);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }

@@ -9,6 +9,11 @@
  *   npx tsx scripts/import_taxa_to_supabase.ts [path/to/real_parking_taxa.json]
  *
  * Apply migration 009 (generic geometry) before importing LineString WFS data.
+ *
+ * Boende (resident) area polygons come from the same GeoJSON when generated with
+ * `scripts/fetch_real_parking_taxa.py` (includes `parkering:boendeparkering-omrade`).
+ * Those rows use `taxa_name` like `Boende M` (from `ParkingCharge`); there is no
+ * filter that drops them — if they are missing, re-fetch WFS and re-run this script.
  */
 
 import { createClient } from "@supabase/supabase-js";

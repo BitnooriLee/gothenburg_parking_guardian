@@ -18,7 +18,7 @@
 import {
   formatNextCleaningLabel,
   getCleaningSafetyLevel,
-  type CleaningSchedule,
+  scheduleFromZoneProperties,
 } from "@/lib/cleaning-safety";
 import Map, {
   Layer,
@@ -28,7 +28,11 @@ import Map, {
   Source,
   useMap,
 } from "react-map-gl/mapbox";
-import type { ExpressionSpecification, Map as MapboxMap } from "mapbox-gl";
+import type {
+  ExpressionSpecification,
+  FilterSpecification,
+  Map as MapboxMap,
+} from "mapbox-gl";
 import type { Feature, FeatureCollection } from "geojson";
 import ParkHereBar from "@/components/ParkHereBar";
 import ParkingSettings from "@/components/ParkingSettings";
@@ -42,7 +46,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { LocateFixed } from "lucide-react";
+import { Layers2, LocateFixed } from "lucide-react";
 
 function coerceNumber(x: unknown): number | null {
   if (typeof x === "number" && Number.isFinite(x)) return x;
@@ -162,12 +166,15 @@ const SOURCE_ID = "cleaning-zones";
 const ZONE_LINE_LAYER_ID = "cleaning-safety-line";
 
 const TAXA_SOURCE_ID = "parking-taxa";
-/** Line layer (WFS taxa segments are LineString, not polygons). */
+/** Line layer (WFS taxa segments are LineString; Boende areas are Polygon outlines). */
 const TAXA_LINE_LAYER_ID = "parking-taxa-line";
+/** Fill for selected Boende polygon only (below line). */
+const TAXA_FILL_LAYER_ID = "parking-taxa-boende-fill";
 
 const TAXA_LINE_BASE_WIDTH = 5;
-const TAXA_LINE_RESIDENT_EXTRA_WIDTH = 2;
-const TAXA_LINE_RESIDENT_COLOR = "#3b82f6";
+/** Selected resident area: thick stroke so polygon reads as a “filled” band at street scale. */
+const BOENDE_SELECTED_LINE_WIDTH = 10;
+const BOENDE_SELECTED_LINE_COLOR = "#3b82f6";
 
 /** Default taxa line colors by `taxa_name` (before resident highlight). */
 const TAXA_LINE_BASE_COLOR_EXPR: ExpressionSpecification = [
@@ -309,9 +316,9 @@ function GeolocateMapButton({
       type="button"
       onClick={handleClick}
       disabled={pending}
-      className="gpg-map-float pointer-events-auto fixed bottom-24 right-4 z-[9999] flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-60"
-      aria-label="Find my location — Hitta min position"
-      title="Hitta min position"
+      className="gpg-map-float pointer-events-auto fixed bottom-24 right-4 z-[10001] flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-60"
+      aria-label="Find my location — Hitta min position (then drag the blue pin to adjust parking spot)"
+      title="Hitta min position — dra sedan den blå nålen / Find location — then drag the blue pin"
     >
       <LocateFixed className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden />
     </button>
@@ -339,7 +346,8 @@ function enrichCollection(fc: FeatureCollection, targetTime: Date): FeatureColle
   return {
     ...fc,
     features: features.map((f) => {
-      const schedule = (f?.properties?.schedule ?? {}) as CleaningSchedule;
+      const props = (f?.properties ?? {}) as Record<string, unknown>;
+      const schedule = scheduleFromZoneProperties(props);
       const { level } = getCleaningSafetyLevel(targetTime, schedule);
       return {
         ...f,
@@ -354,7 +362,7 @@ function enrichCollection(fc: FeatureCollection, targetTime: Date): FeatureColle
 }
 
 export default function CleaningSafetyMap() {
-  const { residentZone } = useResidentZone();
+  const { residentZone, showCleaningZones, setShowCleaningZones } = useResidentZone();
   // Inlined at build time for client bundle; Mapbox GL requires a non-zero container (see flex layout below).
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const [rawFc, setRawFc] = useState<FeatureCollection | null>(null);
@@ -367,9 +375,8 @@ export default function CleaningSafetyMap() {
   const [taxaLoading, setTaxaLoading] = useState(true);
   const [taxaLoadedOnce, setTaxaLoadedOnce] = useState(false);
   const [taxaError, setTaxaError] = useState<string | null>(null);
-  /** Last geolocation used for the clickable user marker (Mapbox GeolocateControl drives updates). */
+  /** Map pin after “Find location”; draggable — used for Park Here check-in when set. */
   const [userLngLat, setUserLngLat] = useState<{ lng: number; lat: number } | null>(null);
-  const [userLocationPopupOpen, setUserLocationPopupOpen] = useState(false);
   /** Mapbox GL / mapLib dynamic import or map construction failures (shown in UI). */
   const [mapInitError, setMapInitError] = useState<string | null>(null);
   /** True after Map `onLoad` — base map must never be covered by a full-screen zones fetch overlay. */
@@ -412,38 +419,68 @@ export default function CleaningSafetyMap() {
 
   const taxaForSource = mapReady ? (taxaGeojson ?? EMPTY_FEATURE_COLLECTION) : null;
 
+  // Fill layer ignores non-polygon features; avoid `geometry-type` in filter (can break Mapbox style on some builds).
+  const taxaFillFilter = useMemo((): FilterSpecification | null => {
+    if (!residentZone) return null;
+    const prefix = `Boende ${residentZone}`;
+    return [
+      "==",
+      ["index-of", prefix, ["to-string", ["get", "taxa_name"]]],
+      0,
+    ] as FilterSpecification;
+  }, [residentZone]);
+
+  const taxaFillPaint = useMemo(
+    () => ({
+      "fill-color": BOENDE_SELECTED_LINE_COLOR,
+      "fill-opacity": 0.26,
+    }),
+    [],
+  );
+
   const taxaLinePaint = useMemo(() => {
-    const base = {
-      "line-opacity": 0.55,
-    };
+    const baseOpacity = 0.55;
     if (!residentZone) {
       return {
-        ...base,
+        "line-opacity": baseOpacity,
         "line-color": TAXA_LINE_BASE_COLOR_EXPR,
         "line-width": TAXA_LINE_BASE_WIDTH,
       };
     }
-    const isResidentTaxa: ExpressionSpecification = [
-      "!=",
-      ["index-of", residentZone, ["to-string", ["get", "taxa_name"]]],
-      -1,
+    const prefix = `Boende ${residentZone}`;
+    const isSelectedBoende: ExpressionSpecification = [
+      "==",
+      ["index-of", prefix, ["to-string", ["get", "taxa_name"]]],
+      0,
     ];
     return {
-      ...base,
+      "line-opacity": [
+        "case",
+        isSelectedBoende,
+        0.9,
+        baseOpacity,
+      ] as ExpressionSpecification,
       "line-color": [
         "case",
-        isResidentTaxa,
-        TAXA_LINE_RESIDENT_COLOR,
+        isSelectedBoende,
+        BOENDE_SELECTED_LINE_COLOR,
         TAXA_LINE_BASE_COLOR_EXPR,
       ] as ExpressionSpecification,
       "line-width": [
         "case",
-        isResidentTaxa,
-        TAXA_LINE_BASE_WIDTH + TAXA_LINE_RESIDENT_EXTRA_WIDTH,
+        isSelectedBoende,
+        BOENDE_SELECTED_LINE_WIDTH,
         TAXA_LINE_BASE_WIDTH,
       ] as ExpressionSpecification,
     };
   }, [residentZone]);
+
+  const taxaInteractiveLayerIds = useMemo(() => {
+    const ids = [TAXA_LINE_LAYER_ID];
+    if (showCleaningZones) ids.push(ZONE_LINE_LAYER_ID);
+    if (residentZone) return [TAXA_FILL_LAYER_ID, ...ids];
+    return ids;
+  }, [residentZone, showCleaningZones]);
 
   const loadZones = useCallback(
     async (
@@ -630,6 +667,37 @@ export default function CleaningSafetyMap() {
     [loadZones, loadTaxaZones],
   );
 
+  const openCleaningPreviewAtPoint = useCallback(
+    async (lng: number, lat: number) => {
+      try {
+        const at = encodeURIComponent(targetTime.toISOString());
+        const res = await fetch(
+          `/api/cleaning-zone-preview?lat=${lat}&lng=${lng}&at=${at}`,
+          { cache: "no-store" },
+        );
+        const data = (await res.json()) as {
+          found?: boolean;
+          streetName?: string;
+          nextLabel?: string;
+        };
+        if (data?.found && typeof data.streetName === "string" && typeof data.nextLabel === "string") {
+          setPopup({
+            kind: "cleaning",
+            longitude: lng,
+            latitude: lat,
+            title: data.streetName,
+            nextLabel: data.nextLabel,
+          });
+        } else {
+          setPopup(null);
+        }
+      } catch {
+        setPopup(null);
+      }
+    },
+    [targetTime],
+  );
+
   useEffect(() => {
     return () => {
       if (moveEndDebounceRef.current) clearTimeout(moveEndDebounceRef.current);
@@ -693,7 +761,7 @@ export default function CleaningSafetyMap() {
           }}
         attributionControl={false}
         interactive
-        interactiveLayerIds={[TAXA_LINE_LAYER_ID, ZONE_LINE_LAYER_ID]}
+        interactiveLayerIds={taxaInteractiveLayerIds}
         onLoad={(e) => {
           if (process.env.NODE_ENV === "development") {
             console.info("[CleaningSafetyMap] map load: initial cleaning-zones fetch for viewport");
@@ -725,7 +793,6 @@ export default function CleaningSafetyMap() {
           setMapInitError(err instanceof Error ? err.message : String(err));
         }}
         onClick={(e) => {
-          setUserLocationPopupOpen(false);
           const features = e.features ?? [];
           const taxaHit = features.find((feat) => feat.layer?.id === TAXA_LINE_LAYER_ID);
           const taxaProps = taxaHit?.properties as Record<string, unknown> | undefined;
@@ -750,20 +817,21 @@ export default function CleaningSafetyMap() {
             return;
           }
 
-          const f = features[0];
-          const props = f?.properties;
-          if (!props) {
-            setPopup(null);
+          const zoneHit = features.find((feat) => feat.layer?.id === ZONE_LINE_LAYER_ID);
+          const zProps = zoneHit?.properties as Record<string, unknown> | undefined;
+          if (zProps && zoneHit) {
+            const lngLat = e.lngLat;
+            setPopup({
+              kind: "cleaning",
+              longitude: lngLat.lng,
+              latitude: lngLat.lat,
+              title: String(zProps.street_name ?? zProps.id ?? "Zone"),
+              nextLabel: String(zProps.nextLabel ?? ""),
+            });
             return;
           }
-          const lngLat = e.lngLat;
-          setPopup({
-            kind: "cleaning",
-            longitude: lngLat.lng,
-            latitude: lngLat.lat,
-            title: String(props.street_name ?? props.id ?? "Zone"),
-            nextLabel: String(props.nextLabel ?? ""),
-          });
+
+          void openCleaningPreviewAtPoint(e.lngLat.lng, e.lngLat.lat);
         }}
         onMoveEnd={(e) => {
           scheduleViewportZonesFetch(e.target);
@@ -782,35 +850,18 @@ export default function CleaningSafetyMap() {
             longitude={userLngLat.lng}
             latitude={userLngLat.lat}
             anchor="center"
-            onClick={(ev) => {
-              ev.originalEvent.stopPropagation();
-              setPopup(null);
-              setUserLocationPopupOpen(true);
+            draggable
+            onDragEnd={(e) => {
+              setUserLngLat({ lng: e.lngLat.lng, lat: e.lngLat.lat });
             }}
           >
-            <button
-              type="button"
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-sky-500 shadow-md transition hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-1"
-              aria-label="Your location — Din position"
+            <div
+              className="flex h-9 w-9 cursor-grab touch-none items-center justify-center rounded-full border-2 border-white bg-sky-500 shadow-md outline-none active:cursor-grabbing hover:bg-sky-600 focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1"
+              aria-label="Parking spot pin — drag to adjust · Parkeringsnål — dra för att justera"
             >
               <span className="h-2.5 w-2.5 rounded-full bg-white" aria-hidden />
-            </button>
-          </Marker>
-        )}
-
-        {userLocationPopupOpen && userLngLat && (
-          <Popup
-            longitude={userLngLat.lng}
-            latitude={userLngLat.lat}
-            anchor="top"
-            onClose={() => setUserLocationPopupOpen(false)}
-            closeOnClick={false}
-          >
-            <div className="max-w-xs text-sm">
-              <div className="font-medium text-neutral-900">Din position</div>
-              <div className="mt-1 text-neutral-600">Your location</div>
             </div>
-          </Popup>
+          </Marker>
         )}
 
         {taxaForSource && (
@@ -821,6 +872,14 @@ export default function CleaningSafetyMap() {
             buffer={64}
             tolerance={3.75}
           >
+            {taxaFillFilter ? (
+              <Layer
+                id={TAXA_FILL_LAYER_ID}
+                type="fill"
+                filter={taxaFillFilter}
+                paint={taxaFillPaint}
+              />
+            ) : null}
             <Layer
               id={TAXA_LINE_LAYER_ID}
               type="line"
@@ -835,6 +894,7 @@ export default function CleaningSafetyMap() {
             <Layer
               id={ZONE_LINE_LAYER_ID}
               type="line"
+              layout={{ visibility: showCleaningZones ? "visible" : "none" }}
               paint={{
                 "line-color": [
                   "match",
@@ -901,56 +961,108 @@ export default function CleaningSafetyMap() {
         </Map>
       </div>
 
-      <div
-        className="gpg-map-float pointer-events-auto fixed bottom-8 left-1/2 z-[9999] w-[90%] max-w-md -translate-x-1/2"
-        data-gpg-float="time-slider"
-      >
+      {/* Above map/canvas stack; pass-through lets pan/zoom hit Mapbox; interactive children use pointer-events-auto. */}
+      <div className="pointer-events-none fixed inset-0 z-[9500]" data-gpg-map-chrome="1">
         <div
-          className="rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-lg"
-          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))" }}
+          className="gpg-map-float pointer-events-auto fixed bottom-8 left-1/2 z-[10001] w-[90%] max-w-md -translate-x-1/2"
+          data-gpg-float="time-slider"
         >
-          <label className="gpg-time-slider-label flex min-w-0 items-center gap-2 text-xs text-neutral-700">
-            <span className="shrink-0 whitespace-nowrap">Time (+h)</span>
-            <input
-              type="range"
-              min={-48}
-              max={120}
-              step={0.25}
-              value={offsetHours}
-              onChange={(e) => setOffsetHours(Number(e.target.value))}
-              className="h-2 min-w-0 flex-1 accent-emerald-600"
-            />
-            <span className="w-14 shrink-0 tabular-nums">
-              {offsetHours >= 0 ? "+" : ""}
-              {offsetHours.toFixed(1)}h
-            </span>
-          </label>
+          <div
+            className="rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-lg"
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))" }}
+          >
+            <label className="gpg-time-slider-label flex min-w-0 items-center gap-2 text-xs text-neutral-700">
+              <span className="shrink-0 whitespace-nowrap">Time (+h)</span>
+              <input
+                type="range"
+                min={-48}
+                max={120}
+                step={0.25}
+                value={offsetHours}
+                onChange={(e) => setOffsetHours(Number(e.target.value))}
+                className="h-2 min-w-0 flex-1 accent-emerald-600"
+              />
+              <span className="w-14 shrink-0 tabular-nums">
+                {offsetHours >= 0 ? "+" : ""}
+                {offsetHours.toFixed(1)}h
+              </span>
+            </label>
+          </div>
         </div>
-      </div>
 
-      <GeolocateMapButton getMap={getMapHandle} onLocated={onUserLocated} />
+        <GeolocateMapButton getMap={getMapHandle} onLocated={onUserLocated} />
 
-      <div
-        className="gpg-map-float pointer-events-auto fixed bottom-[10.5rem] left-1/2 z-[9998] w-max max-w-[min(90vw,42rem)] -translate-x-1/2"
-        data-gpg-float="park-here"
-      >
-        <ParkHereBar compact />
+        <div
+          className="gpg-map-float pointer-events-auto fixed bottom-[10.5rem] left-1/2 z-[10035] w-[min(calc(100vw-1.5rem),42rem)] min-w-0 -translate-x-1/2"
+          data-gpg-float="park-here"
+        >
+          <ParkHereBar compact mapCheckInLngLat={userLngLat} mapSimulatedAt={targetTime} />
+        </div>
+
+        {(zonesError || taxaError) && (
+          <div
+            className="pointer-events-auto fixed left-1/2 top-14 z-[10055] w-max max-w-[min(calc(100vw-2rem),22rem)] -translate-x-1/2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-900 shadow-lg"
+            role="alert"
+            data-gpg-map-banner="data-error"
+          >
+            {[zonesError, taxaError].filter(Boolean).join(" · ")}
+          </div>
+        )}
+        {mapInitError && (
+          <div
+            className="pointer-events-auto fixed left-1/2 top-[4.5rem] z-[10055] w-max max-w-[min(calc(100vw-2rem),22rem)] -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-center text-xs text-red-900 shadow-lg"
+            data-gpg-map-blocker="mapbox-init-error"
+            role="alert"
+          >
+            Map failed to initialize: {mapInitError}
+          </div>
+        )}
+
+        <ParkingSettings />
+
+        <button
+          type="button"
+          onClick={() => setShowCleaningZones(!showCleaningZones)}
+          aria-pressed={showCleaningZones}
+          aria-label={
+            showCleaningZones
+              ? "Hide cleaning zones — Dölj städzoner"
+              : "Show cleaning zones — Visa städzoner"
+          }
+          title={
+            showCleaningZones
+              ? "Städzoner på · Cleaning zones on (tryck för att dölja)"
+              : "Städzoner av · Cleaning zones off (tryck för att visa)"
+          }
+          className="gpg-map-float gpg-cleaning-zones-toggle pointer-events-auto fixed right-[4.25rem] z-[10059] flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
+          data-gpg-float="cleaning-zones-toggle"
+        >
+          <Layers2
+            className={`h-5 w-5 shrink-0 ${showCleaningZones ? "text-emerald-600" : "text-neutral-400"}`}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </button>
       </div>
 
       {zonesLoading && !zonesLoadedOnce && !mapReady && (
         <div
-          className="fixed inset-0 z-[10050] flex flex-col gap-3 bg-[#F9FAFB]/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[10050] flex flex-col items-center justify-center gap-4 bg-[#F9FAFB]/85 p-6 backdrop-blur-sm"
           aria-busy
           aria-label="Loading map"
         >
-          <div className="h-3 w-48 max-w-full animate-pulse rounded bg-neutral-200" />
-          <div className="h-3 max-w-md animate-pulse rounded bg-neutral-200" />
-          <div className="mt-4 h-40 max-w-md animate-pulse rounded-lg bg-neutral-200/80" />
+          <div className="flex w-full max-w-xs flex-col items-center gap-3">
+            <div className="h-3 w-full max-w-[12rem] animate-pulse rounded bg-neutral-200" />
+            <div className="h-3 w-full animate-pulse rounded bg-neutral-200" />
+            <div className="mt-1 h-32 w-full max-w-sm animate-pulse rounded-lg bg-neutral-200/80" />
+          </div>
+          <p className="text-center text-[11px] text-neutral-500">Laddar karta… · Loading map…</p>
         </div>
       )}
       {zonesLoading && !zonesLoadedOnce && mapReady && (
         <div
-          className="fixed left-1/2 top-16 z-[10040] w-max max-w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 shadow-lg"
+          className="fixed left-1/2 top-16 z-[10052] w-max max-w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 shadow-lg"
           aria-busy
           aria-label="Loading cleaning zones"
         >
@@ -964,22 +1076,6 @@ export default function CleaningSafetyMap() {
           aria-label="Updating map data"
         />
       )}
-      {(zonesError || taxaError) && (
-        <div className="fixed left-4 top-14 z-[10040] w-max max-w-[min(calc(100vw-8rem),24rem)] rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow-lg">
-          {[zonesError, taxaError].filter(Boolean).join(" · ")}
-        </div>
-      )}
-      {mapInitError && (
-        <div
-          className="fixed left-4 top-[7.25rem] z-[10040] w-max max-w-[min(calc(100vw-8rem),24rem)] rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900 shadow-lg"
-          data-gpg-map-blocker="mapbox-init-error"
-          role="alert"
-        >
-          Map failed to initialize: {mapInitError}
-        </div>
-      )}
-
-      <ParkingSettings />
     </div>
   );
 }
