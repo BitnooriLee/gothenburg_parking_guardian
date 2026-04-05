@@ -316,7 +316,7 @@ function GeolocateMapButton({
       type="button"
       onClick={handleClick}
       disabled={pending}
-      className="gpg-map-float pointer-events-auto fixed bottom-24 right-4 z-[10001] flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-60"
+      className="gpg-map-float pointer-events-auto fixed bottom-[max(11rem,calc(9rem+env(safe-area-inset-bottom,0px)))] right-4 z-[10002] flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-60"
       aria-label="Find my location — Hitta min position (then drag the blue pin to adjust parking spot)"
       title="Hitta min position — dra sedan den blå nålen / Find location — then drag the blue pin"
     >
@@ -963,40 +963,42 @@ export default function CleaningSafetyMap() {
 
       {/* Above map/canvas stack; pass-through lets pan/zoom hit Mapbox; interactive children use pointer-events-auto. */}
       <div className="pointer-events-none fixed inset-0 z-[9500]" data-gpg-map-chrome="1">
-        <div
-          className="gpg-map-float pointer-events-auto fixed bottom-8 left-1/2 z-[10001] w-[90%] max-w-md -translate-x-1/2"
-          data-gpg-float="time-slider"
-        >
-          <div
-            className="rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-lg"
-            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))" }}
-          >
-            <label className="gpg-time-slider-label flex min-w-0 items-center gap-2 text-xs text-neutral-700">
-              <span className="shrink-0 whitespace-nowrap">Time (+h)</span>
-              <input
-                type="range"
-                min={-48}
-                max={120}
-                step={0.25}
-                value={offsetHours}
-                onChange={(e) => setOffsetHours(Number(e.target.value))}
-                className="h-2 min-w-0 flex-1 accent-emerald-600"
-              />
-              <span className="w-14 shrink-0 tabular-nums">
-                {offsetHours >= 0 ? "+" : ""}
-                {offsetHours.toFixed(1)}h
-              </span>
-            </label>
-          </div>
-        </div>
-
         <GeolocateMapButton getMap={getMapHandle} onLocated={onUserLocated} />
 
+        {/* Bottom stack: time slider + park UI — anchored to bottom; map stays visible. */}
         <div
-          className="gpg-map-float pointer-events-auto fixed bottom-[10.5rem] left-1/2 z-[10035] w-[min(calc(100vw-1.5rem),42rem)] min-w-0 -translate-x-1/2"
-          data-gpg-float="park-here"
+          className="pointer-events-none fixed bottom-0 left-0 right-0 z-[10000] flex flex-col items-stretch"
+          data-gpg-map-bottom-stack="1"
         >
-          <ParkHereBar compact mapCheckInLngLat={userLngLat} mapSimulatedAt={targetTime} />
+          <div className="gpg-map-float pointer-events-auto flex w-full justify-center px-3 pt-1">
+            <div
+              className="w-full max-w-md rounded-t-xl border border-b-0 border-neutral-200 bg-white/95 px-4 py-2 shadow-lg backdrop-blur"
+              data-gpg-float="time-slider"
+            >
+              <label className="gpg-time-slider-label flex min-w-0 items-center gap-2 text-xs text-neutral-700">
+                <span className="shrink-0 whitespace-nowrap">Time (+h)</span>
+                <input
+                  type="range"
+                  min={-48}
+                  max={120}
+                  step={0.25}
+                  value={offsetHours}
+                  onChange={(e) => setOffsetHours(Number(e.target.value))}
+                  className="h-2 min-w-0 flex-1 accent-emerald-600"
+                />
+                <span className="w-14 shrink-0 tabular-nums">
+                  {offsetHours >= 0 ? "+" : ""}
+                  {offsetHours.toFixed(1)}h
+                </span>
+              </label>
+            </div>
+          </div>
+          <div
+            className="gpg-map-float pointer-events-auto w-full min-w-0"
+            data-gpg-float="park-here"
+          >
+            <ParkHereBar compact mapCheckInLngLat={userLngLat} mapSimulatedAt={targetTime} />
+          </div>
         </div>
 
         {(zonesError || taxaError) && (

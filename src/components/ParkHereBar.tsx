@@ -23,6 +23,17 @@ function formatSek(amount: number): string {
   return `${amount.toFixed(2)} kr`;
 }
 
+/** Compact duration for the mini dashboard (e.g. 0m, 2h 15m). */
+function formatMiniDuration(checkedInIso: string, now: Date): string {
+  const ms = Math.max(0, now.getTime() - new Date(checkedInIso).getTime());
+  const totalM = Math.floor(ms / 60000);
+  const h = Math.floor(totalM / 60);
+  const m = totalM % 60;
+  if (h <= 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
 /** Elapsed since check-in for display when hourly rate is unknown. */
 function formatElapsedParking(checkedInIso: string, now: Date): string {
   const ms = Math.max(0, now.getTime() - new Date(checkedInIso).getTime());
@@ -72,7 +83,7 @@ function msUntilNextCleaning(session: ParkingSession, now: Date): number {
 }
 
 type ParkHereBarProps = {
-  /** Map overlay: no full-width dock; tight card when idle. */
+  /** Map overlay: bottom sheet layout; tight card when idle. */
   compact?: boolean;
   /**
    * When the user has placed the map pin (e.g. via locate), check-in uses this point instead of GPS.
@@ -87,6 +98,9 @@ type ParkingSpotCleaningPreview = {
   streetName: string;
   nextLabel: string;
 };
+
+const sheetShellClass =
+  "w-full border-t border-neutral-200 bg-white/95 shadow-[0_-6px_24px_rgba(0,0,0,0.07)] backdrop-blur";
 
 export default function ParkHereBar({
   compact = false,
@@ -104,6 +118,7 @@ export default function ParkHereBar({
   const [parkingSpotCleaning, setParkingSpotCleaning] = useState<ParkingSpotCleaningPreview | null>(null);
   /** True when API says no polygon at point (422) — show extra help above the button. */
   const [checkInNoZoneGuide, setCheckInNoZoneGuide] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
     setSession(loadParkingSession());
@@ -111,8 +126,12 @@ export default function ParkHereBar({
 
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
+    return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!session) setDetailsOpen(false);
+  }, [session]);
 
   const now = useMemo(() => new Date(), [tick]);
 
@@ -283,24 +302,91 @@ export default function ParkHereBar({
     setInfoText(null);
     setParkingSpotCleaning(null);
     setCheckInNoZoneGuide(false);
+    setDetailsOpen(false);
   }, []);
 
+  const safeBottom = { paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))" } as const;
+
+  const expandedSessionDetails = session ? (
+    <>
+      <div>
+        <div className="text-xs text-neutral-600">
+          Taxa: <span className="text-neutral-800">{session.taxaName ?? "—"}</span>
+          {coercedHourlyRate != null && (
+            <span className="tabular-nums"> · {coercedHourlyRate} kr/h</span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-2 border-t border-neutral-100 pt-2 text-sm">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+          Parkeringsavgift · Parking fee (live)
+        </div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-xs text-neutral-600">Duration · Tid</span>
+          <span className="tabular-nums text-base font-semibold text-neutral-900">
+            {formatElapsedParking(session.checkedInAt, now)}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-xs text-neutral-600">Est. fee · Beräknad avgift</span>
+          <span className="tabular-nums text-base font-semibold text-neutral-900">
+            {estimatedFeeSek == null ? "—" : formatSek(estimatedFeeSek)}
+          </span>
+        </div>
+        {coercedHourlyRate != null && !residentBenefit && estimatedFeeSek != null && (
+          <p className="text-[11px] leading-snug text-neutral-600">
+            <span className="tabular-nums">
+              {parkedHours.toFixed(2)} h × {coercedHourlyRate} kr/h
+            </span>{" "}
+            ≈ <span className="font-medium text-neutral-800">{formatSek(estimatedFeeSek)}</span>
+            <span className="ml-1 text-neutral-500">
+              · uppdateras varje sekund / updates every second
+            </span>
+          </p>
+        )}
+        {estimatedFeeSek == null && !residentBenefit && (
+          <p className="text-[11px] leading-snug text-neutral-600">
+            Ingen timtaxa från databasen för denna punkt. Flytta nålen närmare en taxalinje, säkerställ Supabase-migration för taxa-RPC, eller importera taxa. · No hourly rate from DB; move pin near a tariff line, apply taxa RPC migration on Supabase, or import taxa data.
+          </p>
+        )}
+        {residentBenefit && (
+          <p className="text-[11px] leading-snug text-emerald-800">
+            Din boendezon matchar detta taxaområde — visad avgift är 0 kr (uppskattning). / Your home zone matches
+            this tariff area — shown fee is 0 kr (estimate).
+          </p>
+        )}
+      </div>
+
+      <div className="grid gap-1 border-t border-neutral-100 pt-2">
+        <div className="text-xs text-neutral-600">Next cleaning · Nästa städning</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`tabular-nums text-lg font-semibold ${
+              cleaningCountdownMs != null && cleaningCountdownMs < 3600000 ? "text-amber-700" : "text-neutral-900"
+            }`}
+          >
+            {cleaningCountdownMs != null ? formatRemaining(cleaningCountdownMs) : "—"}
+          </span>
+          {cleaningCountdownMs != null && cleaningCountdownMs <= 0 && (
+            <span className="text-xs font-medium text-amber-800">Due or active · Dags eller pågår</span>
+          )}
+        </div>
+      </div>
+
+      <p className="border-t border-neutral-100 pt-2 text-[11px] leading-snug text-neutral-600">
+        Notiser · Notifications: om du godkände web push kan servern skicka påminnelser. / If you allowed web push, the
+        server can send reminders.
+      </p>
+    </>
+  ) : null;
+
   const idleCardClass = compact
-    ? "relative z-20 w-full min-w-0 rounded-xl border border-neutral-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur"
+    ? `${sheetShellClass}`
     : "absolute bottom-0 left-0 right-0 z-20 border-t border-neutral-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] backdrop-blur";
 
-  const dashboardPositionClass = compact
-    ? "fixed inset-x-0 bottom-[6rem] z-[10028] flex max-h-[min(52vh,calc(100dvh-9rem))] justify-center overflow-y-auto overscroll-contain px-3 pb-1 sm:px-4 [&>*]:w-[min(calc(100vw-1.5rem),42rem)] [&>*]:min-w-0"
-    : "fixed inset-x-0 bottom-0 z-[10026] px-3 sm:px-4";
-
-  const parkButtonBlock = (
-    <div
-      className={
-        compact
-          ? "flex w-full min-w-0 flex-col gap-2"
-          : "mx-auto flex w-full max-w-lg flex-col gap-2"
-      }
-    >
+  const messagesAndTips = (
+    <>
       {compact && mapCheckInLngLat != null && (
         <p className="text-center text-[10px] leading-snug text-neutral-500">
           Kartnål aktiv — dra den blå nålen för att justera. · Map pin active — drag the blue pin to adjust.
@@ -350,154 +436,107 @@ export default function ParkHereBar({
           {infoText}
         </p>
       )}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => void onParkHere()}
-          className="flex flex-1 min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
-        >
-          <MapPin className="h-4 w-4 shrink-0" aria-hidden />
-          Park Here / Parkera här
-        </button>
-      </div>
-      {loading && (
-        <p className="text-center text-[11px] text-neutral-500" aria-live="polite">
-          Kontrollerar plats och städning… · Checking location…
-        </p>
-      )}
-    </div>
+    </>
+  );
+
+  const primaryActionButton = session ? (
+    <button
+      type="button"
+      disabled={loading}
+      onClick={onEndParking}
+      className="flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:opacity-60"
+    >
+      Stop parking · Avsluta parkering
+    </button>
+  ) : (
+    <button
+      type="button"
+      disabled={loading}
+      onClick={() => void onParkHere()}
+      className="flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+    >
+      <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+      Park Here / Parkera här
+    </button>
   );
 
   if (session) {
-    const sessionDashboardBody = (
-      <>
-        <div>
-          <div className="text-xs font-medium text-emerald-700">Parked · Parkerad</div>
-          <div className="mt-0.5 text-sm font-semibold text-neutral-900">{session.streetName}</div>
-          <div className="mt-1 text-xs text-neutral-600">
-            Taxa: <span className="text-neutral-800">{session.taxaName ?? "—"}</span>
-            {coercedHourlyRate != null && (
-              <span className="tabular-nums"> · {coercedHourlyRate} kr/h</span>
-            )}
+    const miniFee =
+      estimatedFeeSek == null && !residentBenefit ? "—" : formatSek(estimatedFeeSek ?? 0);
+
+    const sessionBody = (
+      <div className="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-3 px-3 pt-3 sm:px-4" style={safeBottom}>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-sm font-semibold leading-snug text-neutral-900">
+              <span className="text-emerald-700">Parkerad · Parked</span>
+              <span className="text-neutral-400"> · </span>
+              <span className="break-words">({session.streetName})</span>
+            </p>
+            <p className="text-xs tabular-nums text-neutral-700">
+              Tid · Time: {formatMiniDuration(session.checkedInAt, now)}
+            </p>
+            <p className="text-xs tabular-nums text-neutral-900">
+              {residentBenefit ? (
+                <span className="font-semibold text-emerald-700">Boendeförmån · Resident benefit — </span>
+              ) : null}
+              <span className="font-semibold">Avgift · Fee: {miniFee}</span>
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((v) => !v)}
+            className="shrink-0 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-xs font-medium text-neutral-800 shadow-sm transition hover:bg-neutral-50"
+            aria-expanded={detailsOpen}
+          >
+            {detailsOpen ? "Stäng · Close" : "Detaljer · Details"}
+          </button>
         </div>
 
-        <div className="grid gap-2 border-t border-neutral-100 pt-2 text-sm">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-            Parkeringsavgift · Parking fee (live)
+        {detailsOpen && (
+          <div className="max-h-[min(40vh,16rem)] space-y-3 overflow-y-auto overscroll-contain border-t border-neutral-100 pt-3 text-sm">
+            {expandedSessionDetails}
           </div>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-xs text-neutral-600">Duration · Tid</span>
-            <span className="tabular-nums text-base font-semibold text-neutral-900">
-              {formatElapsedParking(session.checkedInAt, now)}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-xs text-neutral-600">Est. fee · Beräknad avgift</span>
-            <span className="tabular-nums text-base font-semibold text-neutral-900">
-              {residentBenefit && (
-                <span className="mr-2 text-xs font-normal text-emerald-700">
-                  Resident benefit · Boendeförmån
-                </span>
-              )}
-              {estimatedFeeSek == null ? "—" : formatSek(estimatedFeeSek)}
-            </span>
-          </div>
-          {coercedHourlyRate != null && !residentBenefit && estimatedFeeSek != null && (
-            <p className="text-[11px] leading-snug text-neutral-600">
-              <span className="tabular-nums">
-                {parkedHours.toFixed(2)} h × {coercedHourlyRate} kr/h
-              </span>{" "}
-              ≈ <span className="font-medium text-neutral-800">{formatSek(estimatedFeeSek)}</span>
-              <span className="ml-1 text-neutral-500">
-                · uppdateras varje sekund / updates every second
-              </span>
-            </p>
-          )}
-          {estimatedFeeSek == null && !residentBenefit && (
-            <p className="text-[11px] leading-snug text-neutral-600">
-              Ingen timtaxa från databasen för denna punkt. Flytta nålen närmare en taxalinje, säkerställ Supabase-migration för taxa-RPC, eller importera taxa. · No hourly rate from DB; move pin near a tariff line, apply taxa RPC migration on Supabase, or import taxa data.
-            </p>
-          )}
-          {residentBenefit && (
-            <p className="text-[11px] leading-snug text-emerald-800">
-              Din boendezon matchar detta taxaområde — visad avgift är 0 kr (uppskattning). / Your home zone matches
-              this tariff area — shown fee is 0 kr (estimate).
-            </p>
-          )}
-        </div>
+        )}
 
-        <div className="grid gap-1 border-t border-neutral-100 pt-2">
-          <div className="text-xs text-neutral-600">Next cleaning · Nästa städning</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`tabular-nums text-lg font-semibold ${
-                cleaningCountdownMs != null && cleaningCountdownMs < 3600000 ? "text-amber-700" : "text-neutral-900"
-              }`}
-            >
-              {cleaningCountdownMs != null ? formatRemaining(cleaningCountdownMs) : "—"}
-            </span>
-            {cleaningCountdownMs != null && cleaningCountdownMs <= 0 && (
-              <span className="text-xs font-medium text-amber-800">Due or active · Dags eller pågår</span>
-            )}
-          </div>
-        </div>
-      </>
+        {primaryActionButton}
+      </div>
     );
 
     if (compact) {
-      const sessionCardClass =
-        "w-full min-w-0 shrink-0 rounded-xl border border-neutral-200 bg-white/95 py-3 pl-4 pr-3 shadow-lg backdrop-blur sm:py-4";
       return (
-        <div className={dashboardPositionClass} style={{ pointerEvents: "none" }}>
-          <div
-            className={sessionCardClass}
-            data-gpg-park-check-in="1"
-            style={{
-              pointerEvents: "auto",
-              paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
-            }}
-          >
-            <div className="flex flex-col gap-3">
-              {sessionDashboardBody}
-              <button
-                type="button"
-                onClick={onEndParking}
-                className="mt-1 w-full cursor-pointer rounded-lg border border-neutral-300 bg-white py-2.5 text-sm font-medium text-neutral-800 shadow-sm transition hover:bg-neutral-50"
-              >
-                End parking · Avsluta parkering
-              </button>
-              <div className="border-t border-neutral-200 pt-3">
-                <p className="mb-2 text-center text-[10px] text-neutral-500">
-                  Uppdatera position · Update check-in
-                </p>
-                {parkButtonBlock}
-              </div>
-            </div>
-          </div>
+        <div className={sheetShellClass} data-gpg-park-check-in="1">
+          {sessionBody}
         </div>
       );
     }
 
     return (
       <div className={idleCardClass} style={{ pointerEvents: "none" }}>
-        <div
-          className="mx-auto max-w-lg"
-          style={{ pointerEvents: "auto", paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))" }}
-        >
-          <div className="flex flex-col gap-3">
-            {sessionDashboardBody}
-            {parkButtonBlock}
-            <button
-              type="button"
-              onClick={onEndParking}
-              className="w-full cursor-pointer rounded-lg border border-neutral-300 bg-white py-2.5 text-sm font-medium text-neutral-800 shadow-sm transition hover:bg-neutral-50"
-            >
-              End parking · Avsluta parkering
-            </button>
-          </div>
-        </div>
+        <div className="pointer-events-auto">{sessionBody}</div>
+      </div>
+    );
+  }
+
+  const idleBody = (
+    <div className="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-2 px-3 py-3 sm:px-4" style={safeBottom}>
+      {messagesAndTips}
+      {loading && (
+        <p className="text-center text-[11px] text-neutral-500" aria-live="polite">
+          Kontrollerar plats och städning… · Checking location…
+        </p>
+      )}
+      {primaryActionButton}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <div
+        className={`${sheetShellClass} pointer-events-auto max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain`}
+        data-gpg-park-check-in="1"
+      >
+        {idleBody}
       </div>
     );
   }
@@ -507,7 +546,7 @@ export default function ParkHereBar({
       className={`${idleCardClass} pointer-events-auto max-h-[min(70vh,32rem)] overflow-y-auto overscroll-contain`}
       data-gpg-park-check-in="1"
     >
-      {parkButtonBlock}
+      {idleBody}
     </div>
   );
 }

@@ -76,10 +76,14 @@
   isolation: isolate;
 }
 
-/* Park check-in must stack above time slider (z-[10001]) and geolocate; keep hits on the card. */
+/* Bottom stack (time slider + park sheet) sits above map chrome; settings gear remains higher. */
+[data-gpg-cleaning-safety-map] [data-gpg-map-bottom-stack] {
+  isolation: isolate;
+  z-index: 10000 !important;
+  visibility: visible !important;
+}
 [data-gpg-cleaning-safety-map] [data-gpg-float="park-here"] {
   isolation: auto !important;
-  z-index: 10035 !important;
   visibility: visible !important;
 }
 [data-gpg-map-chrome] [data-gpg-float="park-here"],
