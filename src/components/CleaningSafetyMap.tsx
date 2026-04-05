@@ -295,11 +295,11 @@ function MapZoomCluster({ getMap }: { getMap: () => MapboxMap | null | undefined
   );
 
   return (
-    <div className="pointer-events-auto flex w-10 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg">
+    <div className="pointer-events-auto flex w-10 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-600 dark:bg-neutral-900">
       <button
         type="button"
         onClick={() => zoomBy(1)}
-        className="gpg-map-float flex h-10 w-10 shrink-0 items-center justify-center border-b border-neutral-200 text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-0"
+        className="gpg-map-float flex h-10 w-10 shrink-0 items-center justify-center border-b border-neutral-200 text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-0 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800"
         aria-label="Zoom in"
         title="Zooma in · Zoom in"
       >
@@ -308,7 +308,7 @@ function MapZoomCluster({ getMap }: { getMap: () => MapboxMap | null | undefined
       <button
         type="button"
         onClick={() => zoomBy(-1)}
-        className="gpg-map-float flex h-10 w-10 shrink-0 items-center justify-center text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-0"
+        className="gpg-map-float flex h-10 w-10 shrink-0 items-center justify-center text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-0 dark:text-neutral-200 dark:hover:bg-neutral-800"
         aria-label="Zoom out"
         title="Zooma ut · Zoom out"
       >
@@ -355,7 +355,7 @@ function LocateMapButton({
       type="button"
       onClick={handleClick}
       disabled={pending}
-      className="gpg-map-float pointer-events-auto flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-60"
+      className="gpg-map-float pointer-events-auto flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-60 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
       aria-label="Find my location — Hitta min position (then drag the blue pin to adjust parking spot)"
       title="Hitta min position — dra sedan den blå nålen / Find location — then drag the blue pin"
     >
@@ -1116,7 +1116,7 @@ export default function CleaningSafetyMap() {
       )}
       {zonesLoading && !zonesLoadedOnce && mapReady && (
         <div
-          className="fixed left-1/2 top-16 z-[10052] w-max max-w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 shadow-lg"
+          className="fixed left-1/2 top-16 z-[10052] w-max max-w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 shadow-lg dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300"
           aria-busy
           aria-label="Loading cleaning zones"
         >

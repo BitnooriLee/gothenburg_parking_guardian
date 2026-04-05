@@ -147,6 +147,21 @@
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
 }
 
+.dark [data-gpg-cleaning-safety-map] .gpg-time-slider-input::-webkit-slider-runnable-track {
+  background: rgb(64 64 64);
+  border-color: rgb(82 82 82);
+}
+.dark [data-gpg-cleaning-safety-map] .gpg-time-slider-input::-webkit-slider-thumb {
+  border-color: #262626;
+}
+.dark [data-gpg-cleaning-safety-map] .gpg-time-slider-input::-moz-range-track {
+  background: rgb(64 64 64);
+  border-color: rgb(82 82 82);
+}
+.dark [data-gpg-cleaning-safety-map] .gpg-time-slider-input::-moz-range-thumb {
+  border-color: #262626;
+}
+
 [data-gpg-settings-modal] button {
   cursor: pointer !important;
 }
@@ -182,9 +197,74 @@
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
+.dark [data-gpg-settings-modal] [role="dialog"] {
+  border-color: #404040;
+  background-color: #171717;
+  color: #f5f5f5;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.45), 0 8px 10px -6px rgb(0 0 0 / 0.35);
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   height: 100%;
+}
+
+/* UI motion (CSS only — avoids framer-motion + Next chunk loader edge cases in PWA/dev). */
+@keyframes gpg-slide-up-fade {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes gpg-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes gpg-modal-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes gpg-details-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-gpg-cleaning-safety-map] .gpg-time-slider-panel-enter {
+  animation: gpg-slide-up-fade 0.38s cubic-bezier(0.34, 1.15, 0.64, 1) both;
+}
+[data-gpg-cleaning-safety-map] .gpg-time-slider-thumb-label {
+  transition: left 0.2s cubic-bezier(0.25, 0.82, 0.2, 1.18);
+}
+
+[data-gpg-settings-modal].gpg-modal-backdrop-enter {
+  animation: gpg-fade-in 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+[data-gpg-settings-modal] .gpg-modal-sheet-enter {
+  animation: gpg-modal-sheet-in 0.42s cubic-bezier(0.34, 1.12, 0.64, 1) both;
+}
+
+[data-gpg-park-check-in] .gpg-park-details-enter {
+  animation: gpg-details-reveal 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
 }

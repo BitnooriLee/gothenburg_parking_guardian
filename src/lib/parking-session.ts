@@ -16,7 +16,9 @@ export type ParkingSession = {
   cleaningScheduleJson?: string;
 };
 
-const KEY = "gpg:parking-session";
+export const PARKING_SESSION_STORAGE_KEY = "gpg:parking-session";
+
+const KEY = PARKING_SESSION_STORAGE_KEY;
 
 function isValidParkingSession(value: unknown): value is ParkingSession {
   if (value == null || typeof value !== "object") return false;

@@ -14,7 +14,7 @@ const MAP_CHROME_TOP_OFFSET =
 
 /** Shared chrome for top-right settings toggles (width + radius + shadow). */
 const MAP_SETTINGS_BUTTON_BASE =
-  "gpg-map-float pointer-events-auto flex h-auto min-h-[2.75rem] w-32 shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium shadow-md backdrop-blur-md transition focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
+  "gpg-map-float pointer-events-auto flex h-auto min-h-[2.75rem] w-32 shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium shadow-md backdrop-blur-md transition focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:border-neutral-600/90 dark:bg-neutral-900/88 dark:text-neutral-100 dark:backdrop-blur-md";
 
 type MapControlsProps = {
   offsetHours: number;
@@ -51,7 +51,7 @@ function MapChromeTopRight({
         type="button"
         data-gpg-map-control="zone"
         onClick={onOpenZoneModal}
-        className={`${MAP_SETTINGS_BUTTON_BASE} border-neutral-200/90 bg-white/85 text-neutral-800 hover:bg-white`}
+        className={`${MAP_SETTINGS_BUTTON_BASE} border-neutral-200/90 bg-white/85 text-neutral-800 hover:bg-white dark:hover:bg-neutral-800/95`}
         aria-label={
           zoneSet
             ? `Boendezon ${residentZone} — Resident zone ${residentZone}`
@@ -59,21 +59,25 @@ function MapChromeTopRight({
         }
         title={zoneSet ? `Zon ${residentZone} / Zone ${residentZone}` : "Zoninställning / Zone settings"}
       >
-        <Settings className="h-4 w-4 shrink-0 text-neutral-600" strokeWidth={1.75} aria-hidden />
+        <Settings
+          className="h-4 w-4 shrink-0 text-neutral-600 dark:text-neutral-400"
+          strokeWidth={1.75}
+          aria-hidden
+        />
         <span className="min-w-0 flex-1 overflow-hidden leading-tight">
           {zoneSet ? (
             <>
               <span className="block truncate text-xs font-medium tabular-nums">
                 Zon: {residentZone}
               </span>
-              <span className="mt-0.5 block truncate text-[10px] font-normal text-neutral-500">
+              <span className="mt-0.5 block truncate text-[10px] font-normal text-neutral-500 dark:text-neutral-400">
                 Zone: {residentZone}
               </span>
             </>
           ) : (
             <>
               <span className="block truncate text-xs font-medium">Zoninställning</span>
-              <span className="mt-0.5 block truncate text-[10px] font-normal text-neutral-500">
+              <span className="mt-0.5 block truncate text-[10px] font-normal text-neutral-500 dark:text-neutral-400">
                 Zone setup
               </span>
             </>
@@ -98,18 +102,22 @@ function MapChromeTopRight({
         }
         className={`${MAP_SETTINGS_BUTTON_BASE} ${
           showCleaningZones
-            ? "border-emerald-300/90 bg-white/85 text-emerald-900 ring-1 ring-emerald-500/25 hover:bg-emerald-50/90"
-            : "border-neutral-200/90 bg-white/85 text-neutral-800 hover:bg-white"
+            ? "border-emerald-300/90 bg-white/85 text-emerald-900 ring-1 ring-emerald-500/25 hover:bg-emerald-50/90 dark:border-emerald-500/40 dark:bg-emerald-950/50 dark:text-emerald-100 dark:ring-emerald-400/20 dark:hover:bg-emerald-950/70"
+            : "border-neutral-200/90 bg-white/85 text-neutral-800 hover:bg-white dark:hover:bg-neutral-800/95"
         }`}
       >
         <Calendar
-          className={`h-4 w-4 shrink-0 ${showCleaningZones ? "text-emerald-600" : "text-neutral-600"}`}
+          className={`h-4 w-4 shrink-0 ${
+            showCleaningZones ? "text-emerald-600 dark:text-emerald-400" : "text-neutral-600 dark:text-neutral-400"
+          }`}
           strokeWidth={1.75}
           aria-hidden
         />
         <span className="min-w-0 leading-tight">
           Städschema
-          <span className="mt-0.5 block text-[10px] font-normal text-neutral-500">Cleaning schedule</span>
+          <span className="mt-0.5 block text-[10px] font-normal text-neutral-500 dark:text-neutral-400">
+            Cleaning schedule
+          </span>
         </span>
       </button>
     </div>
@@ -143,40 +151,40 @@ function MapChromeBottomCenter({
       data-gpg-map-bottom-stack="1"
     >
       {showCleaningZones ? (
-        <div className="pointer-events-auto flex w-full justify-center px-3">
+        <div className="pointer-events-auto flex w-full justify-center px-3 gpg-time-slider-panel-enter">
           <div
-            className="gpg-map-float h-auto w-full max-w-md rounded-xl border border-neutral-200 bg-white/95 px-3 pb-4 pt-3 shadow-lg backdrop-blur-md"
+            className="gpg-map-float h-auto w-full max-w-md rounded-xl border border-neutral-200 bg-white/95 px-3 pb-4 pt-3 shadow-lg backdrop-blur-md dark:border-neutral-600 dark:bg-neutral-900/95"
             data-gpg-float="time-slider"
           >
             <div className="flex items-center gap-2">
-              <span className="w-10 shrink-0 text-[10px] font-medium leading-tight text-neutral-800">
+              <span className="w-10 shrink-0 text-[10px] font-medium leading-tight text-neutral-800 dark:text-neutral-100">
                 Nu
-                <span className="block font-normal text-neutral-500">Now</span>
+                <span className="block font-normal text-neutral-500 dark:text-neutral-400">Now</span>
               </span>
               <div className="relative min-h-0 min-w-0 flex-1 pb-1 pt-5">
                 <div
-                  className="pointer-events-none absolute top-0 z-10 min-w-[3.25rem] -translate-x-1/2 rounded-md border border-emerald-200 bg-emerald-600 px-2 py-0.5 text-center text-[11px] font-semibold tabular-nums text-white shadow-md"
+                  className="gpg-time-slider-thumb-label pointer-events-none absolute top-0 z-10 min-w-[3.25rem] -translate-x-1/2 rounded-md border border-emerald-200 bg-emerald-600 px-2 py-0.5 text-center text-[11px] font-semibold tabular-nums text-white shadow-md dark:border-emerald-400/40"
                   style={{ left: `${sliderPct}%` }}
                 >
                   {formatOffsetLabel(offsetHours)}
                 </div>
-                <input
-                  type="range"
-                  min={SLIDER_MIN}
-                  max={SLIDER_MAX}
-                  step={SLIDER_STEP}
-                  value={offsetHours}
-                  onChange={(e) => setOffsetHours(Number(e.target.value))}
-                  className="gpg-time-slider-input min-h-[1.25rem] w-full"
-                  aria-valuemin={SLIDER_MIN}
-                  aria-valuemax={SLIDER_MAX}
-                  aria-valuenow={offsetHours}
-                  aria-label="Simulated time offset hours"
-                />
+                  <input
+                    type="range"
+                    min={SLIDER_MIN}
+                    max={SLIDER_MAX}
+                    step={SLIDER_STEP}
+                    value={offsetHours}
+                    onChange={(e) => setOffsetHours(Number(e.target.value))}
+                    className="gpg-time-slider-input min-h-[1.25rem] w-full"
+                    aria-valuemin={SLIDER_MIN}
+                    aria-valuemax={SLIDER_MAX}
+                    aria-valuenow={offsetHours}
+                    aria-label="Simulated time offset hours"
+                  />
               </div>
-              <span className="w-[3.75rem] shrink-0 text-right text-[10px] font-medium leading-tight text-neutral-800">
+              <span className="w-[3.75rem] shrink-0 text-right text-[10px] font-medium leading-tight text-neutral-800 dark:text-neutral-100">
                 Se framåt
-                <span className="block font-normal text-neutral-500">Ahead</span>
+                <span className="block font-normal text-neutral-500 dark:text-neutral-400">Ahead</span>
               </span>
             </div>
           </div>
