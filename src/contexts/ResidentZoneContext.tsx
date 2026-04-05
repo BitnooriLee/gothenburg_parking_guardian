@@ -30,6 +30,12 @@ type ResidentZoneContextValue = {
   /** Cleaning zone map overlay; default false — preview still loads on Park Here / map pick. */
   showCleaningZones: boolean;
   setShowCleaningZones: (show: boolean) => void;
+  /**
+   * Increments when the user confirms the zone modal — map can run a one-shot highlight animation.
+   * Not persisted; starts at 0.
+   */
+  residentZoneHighlightPulse: number;
+  pulseResidentZoneHighlight: () => void;
 };
 
 const ResidentZoneContext = createContext<ResidentZoneContextValue | null>(null);
@@ -37,6 +43,7 @@ const ResidentZoneContext = createContext<ResidentZoneContextValue | null>(null)
 export function ResidentZoneProvider({ children }: { children: ReactNode }) {
   const [residentZone, setResidentZoneState] = useState("");
   const [showCleaningZones, setShowCleaningZonesState] = useState(false);
+  const [residentZoneHighlightPulse, setResidentZoneHighlightPulse] = useState(0);
 
   useEffect(() => {
     try {
@@ -81,14 +88,27 @@ export function ResidentZoneProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const pulseResidentZoneHighlight = useCallback(() => {
+    setResidentZoneHighlightPulse((n) => n + 1);
+  }, []);
+
   const value = useMemo(
     () => ({
       residentZone,
       setResidentZone,
       showCleaningZones,
       setShowCleaningZones,
+      residentZoneHighlightPulse,
+      pulseResidentZoneHighlight,
     }),
-    [residentZone, setResidentZone, showCleaningZones, setShowCleaningZones],
+    [
+      residentZone,
+      setResidentZone,
+      showCleaningZones,
+      setShowCleaningZones,
+      residentZoneHighlightPulse,
+      pulseResidentZoneHighlight,
+    ],
   );
 
   return (

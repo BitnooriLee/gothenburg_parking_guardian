@@ -44,30 +44,14 @@
   pointer-events: auto !important;
 }
 
-/* Zoom +/-: top-right, left of settings gear + cleaning-zones toggle (two h-11 + gaps). */
-[data-gpg-cleaning-safety-map] .mapboxgl-ctrl-top-right {
-  top: max(calc(env(safe-area-inset-top, 0px) + 4.25rem), 4.25rem) !important;
-  right: max(calc(env(safe-area-inset-right, 0px) + 7.5rem), 7.5rem) !important;
-  left: auto !important;
-  bottom: auto !important;
-}
-
-[data-gpg-cleaning-safety-map] .mapboxgl-ctrl-top-left .mapboxgl-ctrl-zoom {
-  display: none !important;
-}
-
-[data-gpg-cleaning-safety-map] .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl-zoom,
-[data-gpg-cleaning-safety-map] .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-zoom {
-  display: none !important;
-}
+/* Zoom +/- is custom HTML in CleaningSafetyMap (MapChromeBottomRight). */
 
 /* Floating HTML chrome: transparent hit-surface above map; children re-enable pointer-events. */
 [data-gpg-map-chrome] {
   pointer-events: none !important;
 }
 [data-gpg-map-chrome] .gpg-map-float,
-[data-gpg-map-chrome] .gpg-parking-settings-toggle,
-[data-gpg-map-chrome] .gpg-cleaning-zones-toggle {
+[data-gpg-map-chrome] [data-gpg-map-control] {
   pointer-events: auto !important;
 }
 
@@ -94,15 +78,13 @@
 [data-gpg-park-check-in] {
   visibility: visible !important;
 }
-[data-gpg-cleaning-safety-map] .gpg-parking-settings-toggle {
+[data-gpg-cleaning-safety-map] [data-gpg-map-controls-cluster] {
   opacity: 1 !important;
   visibility: visible !important;
-  z-index: 10060 !important;
 }
-[data-gpg-cleaning-safety-map] .gpg-cleaning-zones-toggle {
+[data-gpg-cleaning-safety-map] [data-gpg-map-control] {
   opacity: 1 !important;
   visibility: visible !important;
-  z-index: 10059 !important;
 }
 [data-gpg-cleaning-safety-map] .gpg-map-float,
 [data-gpg-cleaning-safety-map] .gpg-map-float button,
@@ -115,6 +97,54 @@
 [data-gpg-cleaning-safety-map] .gpg-map-float label.gpg-time-slider-label,
 [data-gpg-cleaning-safety-map] .gpg-map-float input[type="range"] {
   cursor: pointer !important;
+}
+
+/* Time slider: visible track + emerald thumb on light panel (WebKit + Firefox). */
+[data-gpg-cleaning-safety-map] .gpg-time-slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  border-radius: 9999px;
+  background: transparent;
+  cursor: pointer;
+}
+[data-gpg-cleaning-safety-map] .gpg-time-slider-input:focus {
+  outline: none;
+}
+[data-gpg-cleaning-safety-map] .gpg-time-slider-input:focus-visible {
+  outline: 2px solid rgb(16 185 129 / 0.45);
+  outline-offset: 2px;
+}
+[data-gpg-cleaning-safety-map] .gpg-time-slider-input::-webkit-slider-runnable-track {
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: rgb(229 229 229);
+  border: 1px solid rgb(212 212 212);
+}
+[data-gpg-cleaning-safety-map] .gpg-time-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: calc(0.1875rem - 0.5625rem);
+  border-radius: 9999px;
+  background: rgb(52 211 153);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+[data-gpg-cleaning-safety-map] .gpg-time-slider-input::-moz-range-track {
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: rgb(229 229 229);
+  border: 1px solid rgb(212 212 212);
+}
+[data-gpg-cleaning-safety-map] .gpg-time-slider-input::-moz-range-thumb {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background: rgb(52 211 153);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
 }
 
 [data-gpg-settings-modal] button {

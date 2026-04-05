@@ -23,7 +23,6 @@ import {
 import Map, {
   Layer,
   Marker,
-  NavigationControl,
   Popup,
   Source,
   useMap,
@@ -34,8 +33,8 @@ import type {
   Map as MapboxMap,
 } from "mapbox-gl";
 import type { Feature, FeatureCollection } from "geojson";
+import MapControls from "@/components/MapControls";
 import ParkHereBar from "@/components/ParkHereBar";
-import ParkingSettings from "@/components/ParkingSettings";
 import { useResidentZone } from "@/contexts/ResidentZoneContext";
 import { omitDemoTaxaZones } from "@/lib/taxa-demo-filter";
 import {
@@ -46,7 +45,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Layers2, LocateFixed } from "lucide-react";
+import { LocateFixed, Minus, Plus } from "lucide-react";
 
 function coerceNumber(x: unknown): number | null {
   if (typeof x === "number" && Number.isFinite(x)) return x;
@@ -279,7 +278,47 @@ function CleaningZonesRegistrationDiagnostics({
   return null;
 }
 
-function GeolocateMapButton({
+const MAP_CHROME_BOTTOM_RIGHT_BOTTOM =
+  "max(11rem, calc(9rem + env(safe-area-inset-bottom, 0px)))";
+
+function MapZoomCluster({ getMap }: { getMap: () => MapboxMap | null | undefined }) {
+  const zoomBy = useCallback(
+    (delta: number) => {
+      const m = getMap();
+      if (!m) return;
+      const next = m.getZoom() + delta;
+      const min = m.getMinZoom?.() ?? 0;
+      const max = m.getMaxZoom?.() ?? 22;
+      m.easeTo({ zoom: Math.min(max, Math.max(min, next)), duration: 220, essential: true });
+    },
+    [getMap],
+  );
+
+  return (
+    <div className="pointer-events-auto flex w-10 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg">
+      <button
+        type="button"
+        onClick={() => zoomBy(1)}
+        className="gpg-map-float flex h-10 w-10 shrink-0 items-center justify-center border-b border-neutral-200 text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-0"
+        aria-label="Zoom in"
+        title="Zooma in · Zoom in"
+      >
+        <Plus className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={() => zoomBy(-1)}
+        className="gpg-map-float flex h-10 w-10 shrink-0 items-center justify-center text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-0"
+        aria-label="Zoom out"
+        title="Zooma ut · Zoom out"
+      >
+        <Minus className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+function LocateMapButton({
   getMap,
   onLocated,
 }: {
@@ -316,12 +355,32 @@ function GeolocateMapButton({
       type="button"
       onClick={handleClick}
       disabled={pending}
-      className="gpg-map-float pointer-events-auto fixed bottom-[max(11rem,calc(9rem+env(safe-area-inset-bottom,0px)))] right-4 z-[10002] flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-60"
+      className="gpg-map-float pointer-events-auto flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-60"
       aria-label="Find my location — Hitta min position (then drag the blue pin to adjust parking spot)"
       title="Hitta min position — dra sedan den blå nålen / Find location — then drag the blue pin"
     >
       <LocateFixed className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden />
     </button>
+  );
+}
+
+/** Bottom-right: zoom +/- cluster + locate, one column, centered (replaces Mapbox NavigationControl). */
+function MapChromeBottomRight({
+  getMap,
+  onLocated,
+}: {
+  getMap: () => MapboxMap | null | undefined;
+  onLocated: (lng: number, lat: number) => void;
+}) {
+  return (
+    <div
+      className="pointer-events-none fixed right-4 z-[10002] flex flex-col items-center gap-2"
+      style={{ bottom: MAP_CHROME_BOTTOM_RIGHT_BOTTOM }}
+      data-gpg-map-zoom-locate="1"
+    >
+      <MapZoomCluster getMap={getMap} />
+      <LocateMapButton getMap={getMap} onLocated={onLocated} />
+    </div>
   );
 }
 
@@ -361,8 +420,16 @@ function enrichCollection(fc: FeatureCollection, targetTime: Date): FeatureColle
   };
 }
 
+const BOENDE_FILL_OPACITY_TARGET = 0.26;
+
+/** Mapbox rejects fill-opacity below 0; guard floats and transition overshoot. */
+function clampFillOpacity(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
 export default function CleaningSafetyMap() {
-  const { residentZone, showCleaningZones, setShowCleaningZones } = useResidentZone();
+  const { residentZone, showCleaningZones, residentZoneHighlightPulse } = useResidentZone();
   // Inlined at build time for client bundle; Mapbox GL requires a non-zero container (see flex layout below).
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const [rawFc, setRawFc] = useState<FeatureCollection | null>(null);
@@ -384,6 +451,40 @@ export default function CleaningSafetyMap() {
 
   const mapHandleRef = useRef<MapboxMap | null>(null);
   const getMapHandle = useCallback(() => mapHandleRef.current, []);
+
+  /** Boende fill opacity — animated on modal confirm (`pulseResidentZoneHighlight`). */
+  const [boendeFillOpacity, setBoendeFillOpacity] = useState(0);
+
+  useEffect(() => {
+    if (!residentZone) {
+      setBoendeFillOpacity(0);
+      return;
+    }
+    setBoendeFillOpacity(clampFillOpacity(BOENDE_FILL_OPACITY_TARGET));
+  }, [residentZone]);
+
+  useEffect(() => {
+    if (residentZoneHighlightPulse === 0) return;
+    if (!residentZone) return;
+    let cancelled = false;
+    let raf = 0;
+    setBoendeFillOpacity(0);
+    const start = performance.now();
+    const duration = 640;
+    const step = (now: number) => {
+      if (cancelled) return;
+      const t = Math.min(1, Math.max(0, (now - start) / duration));
+      const ease = 1 - (1 - t) * (1 - t);
+      setBoendeFillOpacity(clampFillOpacity(BOENDE_FILL_OPACITY_TARGET * ease));
+      if (t < 1) raf = requestAnimationFrame(step);
+      else setBoendeFillOpacity(clampFillOpacity(BOENDE_FILL_OPACITY_TARGET));
+    };
+    raf = requestAnimationFrame(step);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [residentZoneHighlightPulse, residentZone]);
 
   const lastSuccessBoundsKeyRef = useRef<string | null>(null);
   const moveEndDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -433,9 +534,11 @@ export default function CleaningSafetyMap() {
   const taxaFillPaint = useMemo(
     () => ({
       "fill-color": BOENDE_SELECTED_LINE_COLOR,
-      "fill-opacity": 0.26,
+      "fill-opacity": clampFillOpacity(boendeFillOpacity),
+      // Avoid Mapbox paint interpolation overshooting into invalid negative opacity during rapid updates.
+      "fill-opacity-transition": { duration: 0, delay: 0 },
     }),
-    [],
+    [boendeFillOpacity],
   );
 
   const taxaLinePaint = useMemo(() => {
@@ -843,8 +946,6 @@ export default function CleaningSafetyMap() {
           sourceShouldBeMounted={Boolean(mapReady && zonesForSource)}
         />
 
-        <NavigationControl position="top-right" />
-
         {userLngLat && (
           <Marker
             longitude={userLngLat.lng}
@@ -962,44 +1063,21 @@ export default function CleaningSafetyMap() {
       </div>
 
       {/* Above map/canvas stack; pass-through lets pan/zoom hit Mapbox; interactive children use pointer-events-auto. */}
-      <div className="pointer-events-none fixed inset-0 z-[9500]" data-gpg-map-chrome="1">
-        <GeolocateMapButton getMap={getMapHandle} onLocated={onUserLocated} />
+      <div
+        className="pointer-events-none fixed inset-0 z-[9500]"
+        data-gpg-map-chrome="1"
+      >
+        {/* --- MapChrome: BottomRight (zoom + locate column) --- */}
+        <MapChromeBottomRight getMap={getMapHandle} onLocated={onUserLocated} />
 
-        {/* Bottom stack: time slider + park UI — anchored to bottom; map stays visible. */}
-        <div
-          className="pointer-events-none fixed bottom-0 left-0 right-0 z-[10000] flex flex-col items-stretch"
-          data-gpg-map-bottom-stack="1"
-        >
-          <div className="gpg-map-float pointer-events-auto flex w-full justify-center px-3 pt-1">
-            <div
-              className="w-full max-w-md rounded-t-xl border border-b-0 border-neutral-200 bg-white/95 px-4 py-2 shadow-lg backdrop-blur"
-              data-gpg-float="time-slider"
-            >
-              <label className="gpg-time-slider-label flex min-w-0 items-center gap-2 text-xs text-neutral-700">
-                <span className="shrink-0 whitespace-nowrap">Time (+h)</span>
-                <input
-                  type="range"
-                  min={-48}
-                  max={120}
-                  step={0.25}
-                  value={offsetHours}
-                  onChange={(e) => setOffsetHours(Number(e.target.value))}
-                  className="h-2 min-w-0 flex-1 accent-emerald-600"
-                />
-                <span className="w-14 shrink-0 tabular-nums">
-                  {offsetHours >= 0 ? "+" : ""}
-                  {offsetHours.toFixed(1)}h
-                </span>
-              </label>
-            </div>
-          </div>
-          <div
-            className="gpg-map-float pointer-events-auto w-full min-w-0"
-            data-gpg-float="park-here"
-          >
+        {/* --- MapChrome: TopRight + BottomCenter (MapControls) --- */}
+        <MapControls
+          offsetHours={offsetHours}
+          setOffsetHours={setOffsetHours}
+          parkHereBar={
             <ParkHereBar compact mapCheckInLngLat={userLngLat} mapSimulatedAt={targetTime} />
-          </div>
-        </div>
+          }
+        />
 
         {(zonesError || taxaError) && (
           <div
@@ -1020,32 +1098,6 @@ export default function CleaningSafetyMap() {
           </div>
         )}
 
-        <ParkingSettings />
-
-        <button
-          type="button"
-          onClick={() => setShowCleaningZones(!showCleaningZones)}
-          aria-pressed={showCleaningZones}
-          aria-label={
-            showCleaningZones
-              ? "Hide cleaning zones — Dölj städzoner"
-              : "Show cleaning zones — Visa städzoner"
-          }
-          title={
-            showCleaningZones
-              ? "Städzoner på · Cleaning zones on (tryck för att dölja)"
-              : "Städzoner av · Cleaning zones off (tryck för att visa)"
-          }
-          className="gpg-map-float gpg-cleaning-zones-toggle pointer-events-auto fixed right-[4.25rem] z-[10059] flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-          data-gpg-float="cleaning-zones-toggle"
-        >
-          <Layers2
-            className={`h-5 w-5 shrink-0 ${showCleaningZones ? "text-emerald-600" : "text-neutral-400"}`}
-            strokeWidth={1.75}
-            aria-hidden
-          />
-        </button>
       </div>
 
       {zonesLoading && !zonesLoadedOnce && !mapReady && (

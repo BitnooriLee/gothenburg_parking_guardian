@@ -100,7 +100,7 @@ type ParkingSpotCleaningPreview = {
 };
 
 const sheetShellClass =
-  "w-full border-t border-neutral-200 bg-white/95 shadow-[0_-6px_24px_rgba(0,0,0,0.07)] backdrop-blur";
+  "w-full rounded-xl border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-md";
 
 export default function ParkHereBar({
   compact = false,

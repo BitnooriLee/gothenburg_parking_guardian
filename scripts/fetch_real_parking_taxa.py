@@ -64,6 +64,30 @@ TAXA_TYPE_NAMES: tuple[str, ...] = (
 BOENDE_OMRADE_TYPE_NAME = "parkering:boendeparkering-omrade"
 
 
+def _boende_taxa_code(props: dict[str, Any]) -> str | None:
+    """
+    Build display / taxa code for Boendeparkering polygons.
+
+    WFS schema (DescribeFeatureType, parkering:boendeparkering-omrade) exposes only:
+    parkeringsområde, färg, boende, förkortning — no area_number / zone_id / sub_area.
+
+    Signs may read e.g. "M4" while `boende` is still "M"; a numeric or full-code
+    suffix may appear in `förkortning` when populated.
+    """
+    letter = str(props.get("boende") or "").strip()
+    if not letter:
+        return None
+    fk = str(props.get("förkortning") or "").strip()
+    if not fk:
+        return letter
+    if fk.isdigit():
+        return f"{letter}{fk}"
+    # e.g. boende "M", förkortning "M4" — use full sign code, avoid "MM4"
+    if fk.upper().startswith(letter.upper()) and len(fk) > len(letter):
+        return fk
+    return letter
+
+
 def _wfs_get_feature_url(
     type_name: str,
     *,
@@ -221,13 +245,13 @@ def fetch_boende_omrade_layer(
         if need_reproject:
             g = reproject_geometry(g, source_epsg)
         props = dict(f.get("properties") or {})
-        letter = str(props.get("boende") or "").strip()
-        if not letter:
+        code = _boende_taxa_code(props)
+        if not code:
             continue
         props["wfs_type_name"] = type_name
-        props["taxa_code"] = letter
+        props["taxa_code"] = code
         # import_taxa_to_supabase.ts: taxaDisplayName uses ParkingCharge when set → taxa_name
-        props["ParkingCharge"] = f"Boende {letter}"
+        props["ParkingCharge"] = f"Boende {code}"
         out.append(
             {
                 "type": "Feature",
