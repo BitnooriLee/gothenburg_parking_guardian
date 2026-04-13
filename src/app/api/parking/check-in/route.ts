@@ -7,6 +7,7 @@ import type { ParkingSession } from "@/lib/parking-session";
 import { buildCleaningAlertBody, formatDeadlineStockholm } from "@/lib/notification-payload";
 import { findCleaningZoneFeatureAtPoint } from "@/lib/find-cleaning-zone-feature-at-point";
 import { parseSwedishRestriction } from "@/lib/parser";
+import { isValidResidentZoneCode } from "@/lib/resident-zone-codes";
 import { normalizeSupabaseRpcRows } from "@/lib/supabase-rpc-rows";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -25,6 +26,8 @@ type Body = {
   /** Some clients send latitude/longitude; normalize to lat/lng. */
   latitude?: unknown;
   longitude?: unknown;
+  /** Boende letter (e.g. M) from settings; used for resident-benefit geometry check only. */
+  residentZone?: unknown;
   subscription?: PushSubscriptionJSON;
 };
 
@@ -61,22 +64,39 @@ function parseHourlyRate(raw: unknown): number | null {
   return null;
 }
 
-async function findTaxaAtPoint(
+function isMissingRpcError(error: { code?: string; message?: string }): boolean {
+  const code = error.code ?? "";
+  const msg = (error.message ?? "").toLowerCase();
+  return code === "PGRST202" || msg.includes("could not find the function") || msg.includes("schema cache");
+}
+
+async function findTaxaAtPointWithRpc(
   lat: number,
   lng: number,
+  rpcName: "parking_taxa_at_point" | "parking_taxa_at_point_for_fee",
 ): Promise<{ taxaName: string; hourlyRate: number } | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
     if (shouldLogCleaningCheckInCoords()) {
-      console.warn("[check-in/parking_taxa_at_point] skipped: missing Supabase URL or anon key");
+      console.warn(`[check-in/${rpcName}] skipped: missing Supabase URL or anon key`);
     }
     return null;
   }
   const supabase = createClient(url, key);
-  const { data, error } = await supabase.rpc("parking_taxa_at_point", { lat, lng });
+  const { data, error } = await supabase.rpc(rpcName, { lat, lng });
   if (error) {
-    console.warn("[check-in/parking_taxa_at_point] RPC error", {
+    if (
+      rpcName === "parking_taxa_at_point_for_fee" &&
+      isMissingRpcError(error) &&
+      shouldLogCleaningCheckInCoords()
+    ) {
+      console.warn("[check-in/parking_taxa_at_point_for_fee] missing; falling back to parking_taxa_at_point");
+    }
+    if (rpcName === "parking_taxa_at_point_for_fee" && isMissingRpcError(error)) {
+      return findTaxaAtPointWithRpc(lat, lng, "parking_taxa_at_point");
+    }
+    console.warn(`[check-in/${rpcName}] RPC error`, {
       message: error.message,
       code: error.code,
       details: error.details,
@@ -91,7 +111,7 @@ async function findTaxaAtPoint(
   const taxaName = typeof nameRaw === "string" ? nameRaw.trim() : "";
   if (!taxaName) {
     if (shouldLogCleaningCheckInCoords()) {
-      console.info("[check-in/parking_taxa_at_point] no row / empty taxa_name", {
+      console.info(`[check-in/${rpcName}] no row / empty taxa_name`, {
         lat,
         lng,
         rowCount: rows.length,
@@ -105,7 +125,7 @@ async function findTaxaAtPoint(
   const hourlyRate = rate ?? 0;
 
   if (shouldLogCleaningCheckInCoords()) {
-    console.info("[check-in/parking_taxa_at_point] hit", {
+    console.info(`[check-in/${rpcName}] hit`, {
       lat,
       lng,
       taxaName,
@@ -115,6 +135,32 @@ async function findTaxaAtPoint(
   }
 
   return { taxaName, hourlyRate };
+}
+
+async function pointInsideResidentBoende(
+  lat: number,
+  lng: number,
+  zoneLetter: string,
+): Promise<boolean> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return false;
+  const supabase = createClient(url, key);
+  const { data, error } = await supabase.rpc("point_inside_resident_boende", {
+    lat,
+    lng,
+    zone_letter: zoneLetter,
+  });
+  if (error) {
+    if (shouldLogCleaningCheckInCoords()) {
+      console.warn("[check-in/point_inside_resident_boende] RPC error", {
+        message: error.message,
+        code: error.code,
+      });
+    }
+    return false;
+  }
+  return data === true;
 }
 
 export async function POST(req: Request) {
@@ -127,6 +173,9 @@ export async function POST(req: Request) {
   const lat = parseCoord(body.lat, body.latitude);
   const lng = parseCoord(body.lng, body.longitude);
   const { subscription } = body;
+  const residentZoneRaw = typeof body.residentZone === "string" ? body.residentZone.trim() : "";
+  const residentZoneParam =
+    residentZoneRaw.length > 0 && isValidResidentZoneCode(residentZoneRaw) ? residentZoneRaw : "";
 
   if (lat == null || lng == null) {
     if (shouldLogCleaningCheckInCoords()) {
@@ -187,7 +236,12 @@ export async function POST(req: Request) {
   const alert1 = new Date(nextMs - 1 * 3600000).toISOString();
   const deadlineSv = formatDeadlineStockholm(nextCleaningIso);
 
-  const taxaHit = await findTaxaAtPoint(lat, lng);
+  const [taxaHit, residentBenefitEligible] = await Promise.all([
+    findTaxaAtPointWithRpc(lat, lng, "parking_taxa_at_point_for_fee"),
+    residentZoneParam
+      ? pointInsideResidentBoende(lat, lng, residentZoneParam)
+      : Promise.resolve(false),
+  ]);
 
   const session: ParkingSession = {
     zoneId: String(feature.properties.id),
@@ -200,6 +254,7 @@ export async function POST(req: Request) {
     cleaningScheduleJson: JSON.stringify(schedule),
     taxaName: taxaHit?.taxaName,
     hourlyRate: taxaHit != null ? taxaHit.hourlyRate : null,
+    residentBenefitEligible,
   };
 
   const payloadBase = {

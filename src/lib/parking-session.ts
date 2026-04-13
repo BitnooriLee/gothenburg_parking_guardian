@@ -8,10 +8,12 @@ export type ParkingSession = {
   alert1hIso: string;
   /** Parsed rule snapshot from parser (optional) */
   parsedRuleJson?: string;
-  /** Nearest taxa at check-in (from `parking_taxa_at_point`) */
+  /** Nearest taxa at check-in (from `parking_taxa_at_point_for_fee`) */
   taxaName?: string;
   /** Hourly rate in SEK; omit if no taxa match */
   hourlyRate?: number | null;
+  /** True only if GPS/pin is inside the user’s Boende polygon (server: `point_inside_resident_boende`). */
+  residentBenefitEligible?: boolean;
   /** Snapshot of cleaning schedule JSON for the matched zone */
   cleaningScheduleJson?: string;
 };

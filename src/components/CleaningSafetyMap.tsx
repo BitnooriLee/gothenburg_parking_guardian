@@ -451,7 +451,8 @@ function clampFillOpacity(value: number): number {
 export default function CleaningSafetyMap() {
   const { residentZone, showCleaningZones, residentZoneHighlightPulse } = useResidentZone();
   // Inlined at build time for client bundle; Mapbox GL requires a non-zero container (see flex layout below).
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  /** Trim: Vercel/dashboard env values sometimes include trailing newline or spaces → invalid token / 403 tiles. */
+  const token = (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "").trim();
   const [rawFc, setRawFc] = useState<FeatureCollection | null>(null);
   const [zonesLoading, setZonesLoading] = useState(true);
   const [zonesLoadedOnce, setZonesLoadedOnce] = useState(false);
@@ -824,12 +825,11 @@ export default function CleaningSafetyMap() {
   /** Dev-only: confirms props before Map mounts; if onLoad never fires, compare with Mapbox account / env. */
   useEffect(() => {
     if (!token || process.env.NODE_ENV !== "development") return;
-    const t = token.trim();
     console.info("[CleaningSafetyMap] Mapbox props (dev)", {
       mapStyle: MAP_STYLE,
       mapboxAccessTokenToMap: true,
-      tokenLength: t.length,
-      tokenStartsWithPkDot: t.startsWith("pk."),
+      tokenLength: token.length,
+      tokenStartsWithPkDot: token.startsWith("pk."),
     });
   }, [token]);
 

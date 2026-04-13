@@ -1,6 +1,10 @@
 "use client";
 
 import {
+  RESIDENT_ZONE_CODES,
+  type ResidentZoneCode,
+} from "@/lib/resident-zone-codes";
+import {
   createContext,
   useCallback,
   useContext,
@@ -15,13 +19,7 @@ export const USER_RESIDENT_ZONE_STORAGE_KEY = "user_resident_zone";
 /** Persisted map overlay: cleaning zone lines on the map (default off). */
 export const SHOW_CLEANING_ZONES_STORAGE_KEY = "gpg_show_cleaning_zones";
 
-/**
- * Boendeparkering zone letters from WFS `parkering:boendeparkering-omrade` (`boende` property).
- * Must stay in sync with imported `taxa_name` prefix `Boende {letter}`.
- */
-export const RESIDENT_ZONE_CODES = ["C", "G", "H", "K", "L", "M", "S", "V", "Ä", "Ö"] as const;
-
-export type ResidentZoneCode = (typeof RESIDENT_ZONE_CODES)[number];
+export { RESIDENT_ZONE_CODES, type ResidentZoneCode };
 
 type ResidentZoneContextValue = {
   /** Empty string = not set (no highlight). */

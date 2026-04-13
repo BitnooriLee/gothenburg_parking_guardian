@@ -50,16 +50,6 @@ function elapsedHours(checkedInIso: string, now: Date): number {
   return Math.max(0, (now.getTime() - t0) / 3600000);
 }
 
-function taxaMatchesResidentZone(taxaName: string | undefined, residentZone: string): boolean {
-  if (!taxaName || !residentZone) return false;
-  const t = taxaName.trim();
-  const z = residentZone.trim();
-  const m = t.match(/^Boende\s+(.+)$/i);
-  if (!m) return false;
-  const key = m[1].trim();
-  return key.toLowerCase().startsWith(z.toLowerCase());
-}
-
 /** localStorage / JSON may store hourly_rate as string; coalesce for live fee math. */
 function coerceHourlyRate(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -145,9 +135,10 @@ export default function ParkHereBar({
 
   const now = useWallClock();
 
+  /** Server sets this from `point_inside_resident_boende` + selected zone (not inferred from taxa name). */
   const residentBenefit = useMemo(
-    () => taxaMatchesResidentZone(session?.taxaName, residentZone),
-    [session?.taxaName, residentZone],
+    () => session?.residentBenefitEligible === true,
+    [session?.residentBenefitEligible],
   );
 
   const coercedHourlyRate = useMemo(
@@ -235,6 +226,7 @@ export default function ParkHereBar({
           body: JSON.stringify({
             lat,
             lng,
+            ...(residentZone.trim() !== "" ? { residentZone: residentZone.trim() } : {}),
             subscription: subJson
               ? {
                   endpoint: subJson.endpoint!,
@@ -308,7 +300,7 @@ export default function ParkHereBar({
       setLoading(false);
       setCheckInResponseDone(true);
     }
-  }, [mapCheckInLngLat, mapSimulatedAt]);
+  }, [mapCheckInLngLat, mapSimulatedAt, residentZone]);
 
   const onEndParking = useCallback(() => {
     clearParkingSession();
