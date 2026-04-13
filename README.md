@@ -4,18 +4,43 @@
 
 ---
 ## Screenshot 
-- Starting Screen
-<img width="1707" height="919" alt="Screenshot 2026-04-13 at 13 52 45" src="https://github.com/user-attachments/assets/b498425d-7340-4356-95b3-0e1812931f43" />
-- Checking Cleaning schedule
-- <img width="1709" height="934" alt="Screenshot 2026-04-13 at 13 53 41" src="https://github.com/user-attachments/assets/45219e4b-f048-4c15-9d71-ce70834f5074" />
-- Selecting your residency parking zone if you have 
-<img width="1709" height="918" alt="Screenshot 2026-04-13 at 16 55 40" src="https://github.com/user-attachments/assets/3b91281e-c20e-4045-a744-6e5e2932ee3d" />
-- Showing your residency parking zone in blue area 
-<img width="1709" height="905" alt="Screenshot 2026-04-13 at 16 56 22" src="https://github.com/user-attachments/assets/bb3f9686-2bcb-4583-b8d4-8e6bd674bacd" />
-- Parking fee is free of charge when you park in your residency parking zone 
-<img width="684" height="678" alt="Screenshot 2026-04-13 at 16 57 03" src="https://github.com/user-attachments/assets/65a4a740-5304-4d76-ab86-95fffe71c6d1" />
-- Calculating the parking fee when you start parking outside of your residency parking zone 
-<img width="619" height="858" alt="Screenshot 2026-04-13 at 19 28 28" src="https://github.com/user-attachments/assets/bd1b3852-c9cf-4b07-a1cc-d33986b5d9e4" />
+## 📱 App Preview
+
+<div align="center">
+
+### Starting Screen
+<img src="https://github.com/user-attachments/assets/b498425d-7340-4356-95b3-0e1812931f43" alt="Starting Screen" width="900" />
+
+<br><br>
+
+### Checking Cleaning Schedule
+<img src="https://github.com/user-attachments/assets/45219e4b-f048-4c15-9d71-ce70834f5074" alt="Checking Cleaning Schedule" width="900" />
+
+<br><br>
+
+### Selecting Your Residential Parking Zone
+<p><i>If you have a residential parking permit</i></p>
+<img src="https://github.com/user-attachments/assets/3b91281e-c20e-4045-a744-6e5e2932ee3d" alt="Selecting Residential Parking Zone" width="900" />
+
+<br><br>
+
+### Showing Your Residential Parking Zone
+<p><i>Your residential parking zone is highlighted in blue</i></p>
+<img src="https://github.com/user-attachments/assets/bb3f9686-2bcb-4583-b8d4-8e6bd674bacd" alt="Residential Parking Zone Highlighted" width="900" />
+
+<br><br>
+
+### Free Parking in Your Residential Zone
+<p><i>Parking is free of charge when parked within your residential parking zone</i></p>
+<img src="https://github.com/user-attachments/assets/65a4a740-5304-4d76-ab86-95fffe71c6d1" alt="Free Parking in Residential Zone" width="450" />
+
+<br><br>
+
+### Calculating Parking Fees Outside Your Zone
+<p><i>The app calculates the parking fee when you park outside of your residential parking zone</i></p>
+<img src="https://github.com/user-attachments/assets/bd1b3852-c9cf-4b07-a1cc-d33986b5d9e4" alt="Calculating Parking Fees Outside Residential Zone" width="450" />
+
+</div>
 
 ## Why This Exists
 
