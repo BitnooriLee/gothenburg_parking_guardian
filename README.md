@@ -3,7 +3,13 @@
 > **Fine prevention, not just parking info.** A production-grade PWA that saves Gothenburg drivers from 1,300 SEK+ fines by combining real geospatial data, a Swedish rules parser, and proactive push alerts — all in a sub-100ms interactive map.
 
 ---
-<img width="684" height="678" alt="Screenshot 2026-04-13 at 16 57 03" src="https://github.com/user-attachments/assets/65a4a740-5304-4d76-ab86-95fffe71c6d1" /><img width="1707" height="919" alt="Screenshot 2026-04-13 at 13 52 45" src="https://github.com/user-attachments/assets/b498425d-7340-4356-95b3-0e1812931f43" />
+## Screenshot 
+
+- Checking Cleaning schedule 
+<img width="684" height="678" alt="Screenshot 2026-04-13 at 16 57 03" src="https://github.com/user-attachments/assets/65a4a740-5304-4d76-ab86-95fffe71c6d1" />
+- 
+<img width="1707" height="919" alt="Screenshot 2026-04-13 at 13 52 45" src="https://github.com/user-attachments/assets/b498425d-7340-4356-95b3-0e1812931f43" />
+- Checking Residency parking zone 
 <img width="1709" height="934" alt="Screenshot 2026-04-13 at 13 53 41" src="https://github.com/user-attachments/assets/45219e4b-f048-4c15-9d71-ce70834f5074" />
 <img width="1709" height="918" alt="Screenshot 2026-04-13 at 16 55 40" src="https://github.com/user-attachments/assets/3b91281e-c20e-4045-a744-6e5e2932ee3d" />
 <img width="1709" height="905" alt="Screenshot 2026-04-13 at 16 56 22" src="https://github.com/user-attachments/assets/bb3f9686-2bcb-4583-b8d4-8e6bd674bacd" />
