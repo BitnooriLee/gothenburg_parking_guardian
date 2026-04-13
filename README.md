@@ -4,11 +4,69 @@
 
 ---
 
-## Demo
+## Screenshots
 
-https://github.com/BitnooriLee/Gothenburg_Parking_Guardian/raw/main/Gothenburg_parking_guardian.mov
+Each image is followed by a dedicated **Annotations** block. Replace the placeholder lines with your own notes (UI state, test scenario, data source, etc.).
 
-> *Can't play inline? Download [`Gothenburg_parking_guardian.mov`](./Gothenburg_parking_guardian.mov) directly.*
+### 1 — `Screenshot 2026-04-13 at 13.52.45.png`
+
+![Screenshot 2026-04-13 at 13.52.45](.screenshots/Screenshot%202026-04-13%20at%2013.52.45.png)
+
+**Annotations / 주석**
+
+- _(이곳에 설명을 적어 주세요. / Add your notes here.)_
+-
+-
+
+### 2 — `Screenshot 2026-04-13 at 13.53.41.png`
+
+![Screenshot 2026-04-13 at 13.53.41](.screenshots/Screenshot%202026-04-13%20at%2013.53.41.png)
+
+**Annotations / 주석**
+
+- _(이곳에 설명을 적어 주세요. / Add your notes here.)_
+-
+-
+
+### 3 — `Screenshot 2026-04-13 at 16.55.40.png`
+
+![Screenshot 2026-04-13 at 16.55.40](.screenshots/Screenshot%202026-04-13%20at%2016.55.40.png)
+
+**Annotations / 주석**
+
+- _(이곳에 설명을 적어 주세요. / Add your notes here.)_
+-
+-
+
+### 4 — `Screenshot 2026-04-13 at 16.56.22.png`
+
+![Screenshot 2026-04-13 at 16.56.22](.screenshots/Screenshot%202026-04-13%20at%2016.56.22.png)
+
+**Annotations / 주석**
+
+- _(이곳에 설명을 적어 주세요. / Add your notes here.)_
+-
+-
+
+### 5 — `Screenshot 2026-04-13 at 16.57.03.png`
+
+![Screenshot 2026-04-13 at 16.57.03](.screenshots/Screenshot%202026-04-13%20at%2016.57.03.png)
+
+**Annotations / 주석**
+
+- _(이곳에 설명을 적어 주세요. / Add your notes here.)_
+-
+-
+
+### 6 — `Screenshot 2026-04-13 at 19.28.28.png`
+
+![Screenshot 2026-04-13 at 19.28.28](.screenshots/Screenshot%202026-04-13%20at%2019.28.28.png)
+
+**Annotations / 주석**
+
+- _(이곳에 설명을 적어 주세요. / Add your notes here.)_
+-
+-
 
 ---
 
@@ -218,3 +276,6 @@ Migrations live in `supabase/migrations/` and cover: PostGIS extension, `cleanin
 ## License
 
 Private / project use unless stated otherwise.
+
+
+
