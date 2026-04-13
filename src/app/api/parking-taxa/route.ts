@@ -11,6 +11,16 @@ const NO_STORE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0, must-revalidate",
 } as const;
 
+/**
+ * Suffix after "Boende " in taxa_name (e.g. "M4", "L") for resident-zone map matching.
+ * Import pipeline sets taxa_name like `Boende M` / `Boende M4` (see fetch_real_parking_taxa.py).
+ */
+function boendeZoneKeyFromTaxaName(taxaName: unknown): string {
+  if (typeof taxaName !== "string") return "";
+  const m = taxaName.match(/^Boende\s+(.+)$/i);
+  return m ? m[1].trim() : "";
+}
+
 function shouldLogTaxaBbox(): boolean {
   return process.env.DEBUG_PARKING_TAXA === "1" || process.env.NODE_ENV === "development";
 }
@@ -33,15 +43,17 @@ function toFeatureCollection(rows: Record<string, unknown>[]): FeatureCollection
     if (!geometry) continue;
 
     const { geom_geojson: _g, ...rest } = row;
+    const taxaName = rest.taxa_name;
     features.push({
       type: "Feature",
       id: row.id as string | number | undefined,
       geometry,
       properties: {
         id: rest.id,
-        taxa_name: rest.taxa_name,
+        taxa_name: taxaName,
         hourly_rate: rest.hourly_rate,
         color_hint: rest.color_hint,
+        boende_zone_key: boendeZoneKeyFromTaxaName(taxaName),
       },
     });
   }

@@ -225,6 +225,26 @@ const MOVE_END_DEBOUNCE_MS = 320;
 const EMPTY_FEATURE_COLLECTION: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 /**
+ * Mapbox filter/paint expression: feature belongs to the selected Boendeparkering letter (e.g. user "M" matches taxa_name "Boende M4").
+ */
+function residentBoendeMatchExpression(zoneLetter: string): ExpressionSpecification {
+  const z = zoneLetter.trim();
+  const zLower: ExpressionSpecification = ["downcase", z];
+  const keyStr: ExpressionSpecification = ["coalesce", ["to-string", ["get", "boende_zone_key"]], ""];
+  const keyLower: ExpressionSpecification = ["downcase", keyStr];
+  const nameLower: ExpressionSpecification = ["downcase", ["to-string", ["get", "taxa_name"]]];
+  return [
+    "any",
+    [
+      "all",
+      [">", ["length", keyStr], 0],
+      ["==", ["index-of", zLower, keyLower], 0],
+    ],
+    ["==", ["index-of", ["concat", "boende ", zLower], nameLower], 0],
+  ] as ExpressionSpecification;
+}
+
+/**
  * Dev-only: after the style is idle, confirm react-map-gl Source/Layer ids exist on the Mapbox map.
  */
 function CleaningZonesRegistrationDiagnostics({
@@ -522,13 +542,9 @@ export default function CleaningSafetyMap() {
 
   // Fill layer ignores non-polygon features; avoid `geometry-type` in filter (can break Mapbox style on some builds).
   const taxaFillFilter = useMemo((): FilterSpecification | null => {
-    if (!residentZone) return null;
-    const prefix = `Boende ${residentZone}`;
-    return [
-      "==",
-      ["index-of", prefix, ["to-string", ["get", "taxa_name"]]],
-      0,
-    ] as FilterSpecification;
+    const z = residentZone?.trim();
+    if (!z) return null;
+    return residentBoendeMatchExpression(z) as FilterSpecification;
   }, [residentZone]);
 
   const taxaFillPaint = useMemo(
@@ -543,19 +559,15 @@ export default function CleaningSafetyMap() {
 
   const taxaLinePaint = useMemo(() => {
     const baseOpacity = 0.55;
-    if (!residentZone) {
+    const z = residentZone?.trim();
+    if (!z) {
       return {
         "line-opacity": baseOpacity,
         "line-color": TAXA_LINE_BASE_COLOR_EXPR,
         "line-width": TAXA_LINE_BASE_WIDTH,
       };
     }
-    const prefix = `Boende ${residentZone}`;
-    const isSelectedBoende: ExpressionSpecification = [
-      "==",
-      ["index-of", prefix, ["to-string", ["get", "taxa_name"]]],
-      0,
-    ];
+    const isSelectedBoende = residentBoendeMatchExpression(z);
     return {
       "line-opacity": [
         "case",
@@ -875,14 +887,14 @@ export default function CleaningSafetyMap() {
           mapHandleRef.current = map;
           const b = map.getBounds();
           if (!b) return;
-          zonesFetchAbortRef.current?.abort();
-          zonesFetchAbortRef.current = new AbortController();
           const initialBounds = {
             west: b.getWest(),
             south: b.getSouth(),
             east: b.getEast(),
             north: b.getNorth(),
           };
+          zonesFetchAbortRef.current?.abort();
+          zonesFetchAbortRef.current = new AbortController();
           void loadZones(initialBounds, zonesFetchAbortRef.current.signal);
           taxaFetchAbortRef.current?.abort();
           taxaFetchAbortRef.current = new AbortController();

@@ -52,7 +52,12 @@ function elapsedHours(checkedInIso: string, now: Date): number {
 
 function taxaMatchesResidentZone(taxaName: string | undefined, residentZone: string): boolean {
   if (!taxaName || !residentZone) return false;
-  return taxaName.trim() === `Boende ${residentZone.trim()}`;
+  const t = taxaName.trim();
+  const z = residentZone.trim();
+  const m = t.match(/^Boende\s+(.+)$/i);
+  if (!m) return false;
+  const key = m[1].trim();
+  return key.toLowerCase().startsWith(z.toLowerCase());
 }
 
 /** localStorage / JSON may store hourly_rate as string; coalesce for live fee math. */
@@ -206,12 +211,18 @@ export default function ParkHereBar({
         }
       }
       let subJson: ReturnType<PushSubscription["toJSON"]> | undefined;
-      if ("Notification" in window && Notification.permission === "default") {
-        await Notification.requestPermission();
-      }
-      if ("Notification" in window && Notification.permission === "granted") {
-        const sub = await subscribeWebPush();
-        if (sub) subJson = sub.toJSON() as ReturnType<PushSubscription["toJSON"]>;
+      try {
+        if ("Notification" in window && Notification.permission === "default") {
+          await Notification.requestPermission();
+        }
+        if ("Notification" in window && Notification.permission === "granted") {
+          const sub = await subscribeWebPush();
+          if (sub) subJson = sub.toJSON() as ReturnType<PushSubscription["toJSON"]>;
+        }
+      } catch (pushErr) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[ParkHereBar] push subscription skipped; check-in continues without push", pushErr);
+        }
       }
 
       const atParam = encodeURIComponent(mapSimulatedAt.toISOString());
