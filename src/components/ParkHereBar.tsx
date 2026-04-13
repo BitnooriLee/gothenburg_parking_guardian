@@ -160,7 +160,7 @@ export default function ParkHereBar({
   }, [session, residentBenefit, parkedHours, coercedHourlyRate]);
 
   const cleaningCountdownMs = useMemo(() => {
-    if (!session) return null;
+    if (!session || session.taxaOnlyParking) return null;
     return msUntilNextCleaning(session, now);
   }, [session, now]);
 
@@ -274,9 +274,10 @@ export default function ParkHereBar({
         const err =
           typeof errRaw === "string" && errRaw.trim() !== "" ? errRaw.trim() : "Check-in failed";
         const noZone =
-          checkInStatus === 422 ||
-          /no cleaning zone/i.test(err) ||
-          /ingen städ/i.test(err);
+          checkInStatus === 422 &&
+          (/no cleaning zone/i.test(err) ||
+            /ingen städzon/i.test(err) ||
+            /ingen städ/i.test(err));
         setCheckInNoZoneGuide(noZone);
         setErrorText(err);
         return;
@@ -368,27 +369,43 @@ export default function ParkHereBar({
 
       <div className="grid gap-1 border-t border-neutral-100 pt-2 dark:border-neutral-700">
         <div className="text-xs text-neutral-600 dark:text-neutral-400">Next cleaning · Nästa städning</div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`tabular-nums text-lg font-semibold ${
-              cleaningCountdownMs != null && cleaningCountdownMs < 3600000
-                ? "text-amber-700 dark:text-amber-400"
-                : "text-neutral-900 dark:text-neutral-50"
-            }`}
-          >
-            {cleaningCountdownMs != null ? formatRemaining(cleaningCountdownMs) : "—"}
-          </span>
-          {cleaningCountdownMs != null && cleaningCountdownMs <= 0 && (
-            <span className="text-xs font-medium text-amber-800 dark:text-amber-300">
-              Due or active · Dags eller pågår
+        {session.taxaOnlyParking ? (
+          <p className="text-[11px] leading-snug text-neutral-600 dark:text-neutral-400">
+            Ingen städdata för denna plats (ingen städzon i databasen). Avgift följer taxa ovan. · No street-cleaning
+            data here; fee follows the tariff above.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`tabular-nums text-lg font-semibold ${
+                cleaningCountdownMs != null && cleaningCountdownMs < 3600000
+                  ? "text-amber-700 dark:text-amber-400"
+                  : "text-neutral-900 dark:text-neutral-50"
+              }`}
+            >
+              {cleaningCountdownMs != null ? formatRemaining(cleaningCountdownMs) : "—"}
             </span>
-          )}
-        </div>
+            {cleaningCountdownMs != null && cleaningCountdownMs <= 0 && (
+              <span className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                Due or active · Dags eller pågår
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <p className="border-t border-neutral-100 pt-2 text-[11px] leading-snug text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">
-        Notiser · Notifications: om du godkände web push kan servern skicka påminnelser. / If you allowed web push, the
-        server can send reminders.
+        {session.taxaOnlyParking ? (
+          <>
+            Notiser · Notifications: inga städ-push för denna plats (ingen städzon). / No cleaning push alerts for this
+            spot (no cleaning polygon).
+          </>
+        ) : (
+          <>
+            Notiser · Notifications: om du godkände web push kan servern skicka påminnelser. / If you allowed web push,
+            the server can send reminders.
+          </>
+        )}
       </p>
     </>
   ) : null;
@@ -435,11 +452,10 @@ export default function ParkHereBar({
           <p className="mt-1 text-sm leading-snug text-red-800 dark:text-red-200/90">{errorText}</p>
           {checkInNoZoneGuide && (
             <p className="mt-2 border-t border-red-200/80 pt-2 text-[11px] leading-snug text-red-900/90 dark:border-red-800/50 dark:text-red-200/85">
-              Databasen hittar ingen städzon exakt på denna punkt (GPS/nål kan ligga mellan polygoner). Prova att{" "}
-              <strong>dra den blå nålen</strong> några meter mot gatan, slå på{" "}
-              <strong>Visa städzoner</strong> under kugghjulet för att se linjer, eller flytta närmare en synlig zon. · No
-              zone polygon contains this point. Try <strong>dragging the blue pin</strong>, enable{" "}
-              <strong>Show Cleaning Zones</strong> in settings, or move onto a visible zone line.
+              Databasen hittar ingen städzon och/eller ingen taxa vid denna punkt. Prova att <strong>dra den blå nålen</strong>{" "}
+              mot gatan, slå på <strong>Visa städzoner</strong> under kugghjulet, eller flytta närmare en synlig taxalinje. ·
+              No cleaning zone and/or no tariff line here. Try <strong>dragging the blue pin</strong>, enable{" "}
+              <strong>Show Cleaning Zones</strong>, or move closer to a visible tariff line.
             </p>
           )}
         </div>

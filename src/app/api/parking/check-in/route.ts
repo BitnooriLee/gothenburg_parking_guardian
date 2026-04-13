@@ -196,16 +196,53 @@ export async function POST(req: Request) {
     );
   }
 
+  const now = new Date();
+
   const feature = await findCleaningZoneFeatureAtPoint(lat, lng);
+  const [taxaHit, residentBenefitEligible] = await Promise.all([
+    findTaxaAtPointWithRpc(lat, lng, "parking_taxa_at_point_for_fee"),
+    residentZoneParam
+      ? pointInsideResidentBoende(lat, lng, residentZoneParam)
+      : Promise.resolve(false),
+  ]);
+
   if (!feature?.properties) {
-    if (shouldLogCleaningCheckInCoords()) {
-      console.warn("[check-in] 422 no polygon at coordinates (coords were valid; DB/RPC returned no zone)", {
-        lat,
-        lng,
-      });
+    if (!taxaHit) {
+      if (shouldLogCleaningCheckInCoords()) {
+        console.warn("[check-in] 422 no cleaning zone and no taxa at point", { lat, lng });
+      }
+      return NextResponse.json(
+        {
+          error:
+            "No cleaning zone and no parking tariff (taxa) at this location. Move the pin toward a street or a visible tariff line. · Ingen städzon och ingen taxa här — flytta nålen mot gatan eller en taxalinje.",
+        },
+        { status: 422 },
+      );
     }
-    // 422 (not 404): avoids confusion with a missing API route in DevTools.
-    return NextResponse.json({ error: "No cleaning zone at this location" }, { status: 422 });
+
+    const placeholderCleaningIso = new Date(now.getTime() + 50 * 365 * 24 * 3600000).toISOString();
+    const taxaOnlySession: ParkingSession = {
+      zoneId: `gpg-taxa-only-${now.getTime()}`,
+      streetName: `Taxa · ${taxaHit.taxaName}`,
+      checkedInAt: now.toISOString(),
+      nextCleaningIso: placeholderCleaningIso,
+      alert12hIso: placeholderCleaningIso,
+      alert1hIso: placeholderCleaningIso,
+      parsedRuleJson: "{}",
+      cleaningScheduleJson: "{}",
+      taxaName: taxaHit.taxaName,
+      hourlyRate: taxaHit.hourlyRate,
+      residentBenefitEligible,
+      taxaOnlyParking: true,
+    };
+
+    return NextResponse.json({
+      ok: true,
+      session: taxaOnlySession,
+      pushScheduled: false,
+      message:
+        "No street-cleaning polygon here — parking session uses tariff only (no cleaning push alerts). · Ingen städpolygon — sessionen följer taxa; inga städ-push.",
+    });
   }
 
   const street = String(feature.properties.street_name || feature.properties.id || "Unknown street");
@@ -213,7 +250,6 @@ export async function POST(req: Request) {
   const schedule = scheduleFromZoneProperties(feature.properties as Record<string, unknown>);
 
   const parsedRule = parseSwedishRestriction(activeText);
-  const now = new Date();
   let nextMs = getNextCleaningStartMs(now, schedule);
   if (nextMs == null && schedule.nextCleaningStart) {
     nextMs = new Date(schedule.nextCleaningStart).getTime();
@@ -235,13 +271,6 @@ export async function POST(req: Request) {
   const alert12 = new Date(nextMs - 12 * 3600000).toISOString();
   const alert1 = new Date(nextMs - 1 * 3600000).toISOString();
   const deadlineSv = formatDeadlineStockholm(nextCleaningIso);
-
-  const [taxaHit, residentBenefitEligible] = await Promise.all([
-    findTaxaAtPointWithRpc(lat, lng, "parking_taxa_at_point_for_fee"),
-    residentZoneParam
-      ? pointInsideResidentBoende(lat, lng, residentZoneParam)
-      : Promise.resolve(false),
-  ]);
 
   const session: ParkingSession = {
     zoneId: String(feature.properties.id),

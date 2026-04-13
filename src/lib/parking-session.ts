@@ -14,6 +14,10 @@ export type ParkingSession = {
   hourlyRate?: number | null;
   /** True only if GPS/pin is inside the user’s Boende polygon (server: `point_inside_resident_boende`). */
   residentBenefitEligible?: boolean;
+  /**
+   * No cleaning polygon at check-in; fee/taxa still apply. No cleaning push alerts are scheduled.
+   */
+  taxaOnlyParking?: boolean;
   /** Snapshot of cleaning schedule JSON for the matched zone */
   cleaningScheduleJson?: string;
 };
